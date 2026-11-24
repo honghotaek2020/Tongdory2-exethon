@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+  <h2>파일 분석</h2>
+  <p>{{ notice }}</p>
+  <a class="btn" href="/">상황판으로</a>
+  {% if previous_run %}<a class="btn" href="/s2?result=1">직전 묶음 결과</a>{% endif %}
+  {% if retry_run %}
+  <form class="inline" method="post" action="/s2/retry">
+    <input type="hidden" name="run_id" value="{{ retry_run }}">
+    <button class="primary" type="submit">이 묶음 다시 분류</button>
+  </form>
+  {% endif %}
+  <form class="inline" method="post" action="/s2/rescan"><button class="primary" type="submit">파일 종류를 다시 선택하고 재분류</button></form>
+</section>
+{% endblock %}

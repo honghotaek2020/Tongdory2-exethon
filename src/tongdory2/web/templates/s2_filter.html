@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}파일 종류 확인 — 분류 전에 제외할 것 고르기{% endblock %}
+{% block content %}
+{% if notice %}<div class="notice" data-notice-modal>{{ notice }}</div>{% endif %}
+<form method="post" action="/s2/filter" id="filter">
+<input type="hidden" name="token" value="{{ token }}">
+<section class="card">
+  <h2>분류할 파일 종류 선택 · 발견한 파일 {{ '{:,}'.format(s.total) }}개</h2>
+  <p class="hint">파일 내용은 읽지 않고 종류별 개수와 위치를 확인했습니다. <strong>체크를 풀면 그 종류는 이번 분류와 목록에서 빠집니다.</strong> 파일은 건드리지 않으며 언제든 다시 포함할 수 있습니다.{% if s.errors %} · 열 수 없는 폴더 {{ s.errors }}곳{% endif %}</p>
+
+  {% if s.hotspots %}
+  <div class="next" style="margin:0 0 12px">
+    <h3>파일이 몰린 폴더</h3>
+    {% for h in s.hotspots %}
+    <label class="row" style="margin-top:4px"><input type="checkbox" name="exclude_dir" value="{{ h.key }}" data-count="{{ h.count }}" data-exts='{{ h.exts|tojson }}'  {{ 'checked' if h.key in excluded_dirs }}>
+      <span class="path">{{ h.path }}</span> <span class="muted">{{ '{:,}'.format(h.count) }}개 · 전체의 {{ (h.share * 100)|round|int }}%</span> — 이 폴더 전체 제외</label>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="row" style="margin:0 0 12px" role="group" aria-label="빠른 선택 프리셋">
+    <span class="small muted">빠른 선택</span>
+    <button type="button" class="chip-btn" data-preset="doc" aria-pressed="false">문서·사진만</button>
+    <button type="button" class="chip-btn" data-preset="safe" aria-pressed="false" aria-describedby="all-types-help">전체 선택</button>
+    <button type="button" class="chip-btn" data-preset="custom" aria-pressed="false">직접 고르기</button>
+  </div>
+  <p class="hint small" id="all-types-help">‘전체 선택’을 눌러도 민감 파일 종류는 체크하지 않습니다. 위에서 제외한 폴더도 계속 제외됩니다.</p>
+  <div class="exts">
+  {% for e in s.exts %}
+    <label class="ext {{ 'more' if loop.index > 12 }}" {% if loop.index > 12 %}hidden{% endif %}>
+      <span class="row"><input type="checkbox" name="keep_ext" value="{{ e.ext }}" data-sensitive="{{ '1' if e.sensitive else '0' }}" data-count="{{ e.count }}" {{ '' if e.ext in excluded else 'checked' }}>
+        <strong>{{ e.ext }}</strong> <span class="muted">{{ '{:,}'.format(e.count) }}개</span>
+        {% if e.sensitive %}<span class="chip danger">민감·이동 안 함</span>{% endif %}</span>
+      <span class="muted small">주로: {% for f, c in e.folders[:2] %}<span class="path" title="{{ f }}">{{ f if f|length < 46 else f[:20] ~ '…' ~ f[-22:] }}</span> ({{ '{:,}'.format(c) }}){{ ' · ' if not loop.last }}{% endfor %}</span>
+    </label>
+  {% endfor %}
+  </div>
+  {% if s.exts|length > 12 %}<p><a class="link" href="#" onclick="document.querySelectorAll('.ext.more').forEach(e=>e.hidden=false);this.remove();return false">나머지 파일 종류 {{ s.exts|length - 12 }}개 더 보기</a></p>{% endif %}
+</section>
+<div class="bar">
+  <span>분류 대상: <strong id="remain">{{ '{:,}'.format(s.total) }}</strong>개 <span class="muted">/ 발견 {{ '{:,}'.format(s.total) }}개 · {{ '{:,}'.format(one_batch) }}개 이하면 한 번에 분류합니다</span></span>
+  <span class="row"><a class="link" href="/">상황판으로</a><button class="primary" type="submit">이대로 분류 시작</button></span>
+</div>
+</form>
+<script>
+(function(){
+  const total={{ s.total }};
+  function upd(){
+    const off={}; let out=0;
+    document.querySelectorAll('input[name=keep_ext]').forEach(i=>{ if(!i.checked){ off[i.value]=1; out+=+i.dataset.count; } });
+    // 폴더 제외: 그 폴더 안에서 이미 확장자로 뺀 수는 다시 빼지 않는다 (정확한 수)
+    document.querySelectorAll('input[name=exclude_dir]:checked').forEach(i=>{
+      const ex=JSON.parse(i.dataset.exts||'{}'); let n=+i.dataset.count;
+      for(const e in ex){ if(off[e]) n-=ex[e]; }
+      out+=n;
+    });
+    document.getElementById('remain').textContent = Math.max(total-out,0).toLocaleString();
+  }
+  const DOC_IMG = new Set(['docx','doc','xlsx','xls','pptx','ppt','pdf','hwp','hwpx','txt','md','png','jpg','jpeg','gif','webp','svg','bmp','heic']);
+  const presets = document.querySelectorAll('[data-preset]');
+  const types = [...document.querySelectorAll('input[name=keep_ext]')];
+  const includes = (input, preset) => input.dataset.sensitive !== '1' && (preset === 'safe' || DOC_IMG.has(input.value.toLowerCase()));
+  function showPreset(preset) {
+    presets.forEach(button => {
+      const on = button.dataset.preset === preset;
+      button.classList.toggle('on', on);
+      button.setAttribute('aria-pressed', String(on));
+    });
+  }
+  presets.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const p = btn.dataset.preset;
+      showPreset(p);
+      if (p === 'custom') return;
+      types.forEach(i => { i.checked = includes(i, p); });
+      upd();
+    });
+  });
+  document.getElementById('filter').addEventListener('change', (ev) => {
+    if (['keep_ext', 'exclude_dir'].includes(ev.target.name)) {
+      showPreset('custom');
+    }
+    upd();
+  });
+  const matchesPreset = p => types.every(i => i.checked === includes(i, p));
+  const canMatch = types.some(i => i.checked) && !document.querySelector('input[name=exclude_dir]:checked');
+  showPreset(canMatch && matchesPreset('safe') ? 'safe' : canMatch && matchesPreset('doc') ? 'doc' : 'custom');
+  upd();
+})();
+</script>
+{% endblock %}

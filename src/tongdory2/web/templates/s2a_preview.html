@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Liner에 보낼 내용 확인 · 협업 문서{% endblock %}
+{% block content %}
+{% set excluded_count = total - (ready|length) %}
+<section class="card">
+  <h2>Liner에 보낼 내용 확인 — 협업 문서</h2>
+  <p class="hint">전송 대상 협업 문서 <strong>{{ ready|length }}개</strong>를 분류 희망 폴더 목록의 <strong>{{ folders|length }}개</strong> 폴더와 비교해 관련 폴더를 찾습니다. 원본 파일은 옮기거나 바꾸지 않습니다.</p>
+
+  <div class="row preview-summary-chips">
+    <span class="chip">찾은 문서 {{ total }}개</span>
+    <span class="chip ok">전송 대상 {{ ready|length }}개</span>
+    {% if excluded_count > 0 %}<span class="chip warn">제외 {{ excluded_count }}개</span>{% endif %}
+  </div>
+
+  {% if ready %}
+  <div class="preview-file-box" role="region" aria-label="전송 대상 협업 문서 목록">
+    <ul class="preview-file-list">
+      {% for e in ready %}
+      <li><span class="muted small">{{ loop.index }}.</span> <span class="path">{{ e.title or e.name }}</span></li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <div class="preview-cost-box">
+    <strong>호출·비용 안내</strong>
+    <p class="small muted" style="margin:4px 0 0">분석 과정에 따라 여러 번 호출되어 비용이 발생할 수 있습니다. 저장된 동일 요청의 응답이 있으면 추가 호출 없이 재사용합니다. 분석 후 사용 이력에서 비용을 확인할 수 있습니다. 일부 비용은 추정값이거나 기록되지 않을 수 있습니다.</p>
+    <p class="small muted" style="margin:4px 0 0">도구 설정 파일과 민감 문서는 제외되며, 일부 개인정보 패턴만 자동으로 가립니다. 분석에 사용하는 문서 발췌와 비교할 폴더 설명은 아래 버튼에서 확인할 수 있습니다.</p>
+    <div style="margin-top:8px">
+      <button type="button" class="small" id="open-payload-detail" aria-haspopup="dialog" aria-controls="payload-detail-dlg">전송 내용 자세히 보기</button>
+    </div>
+  </div>
+
+  <div class="row preview-actions">
+    <div class="row" style="gap:6px">
+      <form method="post" action="/s2a/cancel" class="inline"><input type="hidden" name="token" value="{{ token }}"><button type="submit">돌아가기</button></form>
+      <form method="post" action="/s2a/approve" class="inline">
+        <input type="hidden" name="token" value="{{ token }}"><input type="hidden" name="local_only" value="1">
+        <button type="submit">Liner 전송 없이 분류 결과 보기</button>
+      </form>
+    </div>
+    <form method="post" action="/s2a/approve" class="row" style="gap:10px">
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="approval" value="{{ approval }}">
+      <label class="row"><input type="checkbox" name="reviewed" value="yes" required> 위 전송 범위를 확인하고 Liner 전송에 동의합니다.</label>
+      <button class="primary" type="submit">전송하고 분석 시작</button>
+    </form>
+  </div>
+</section>
+
+<dialog id="payload-detail-dlg" class="tree-zoom" aria-labelledby="payload-detail-title">
+  <div class="tz-head">
+    <div class="row" style="justify-content:space-between">
+      <h2 id="payload-detail-title" style="margin:0">전송 내용 · 문서 {{ ready|length }}개</h2>
+      <button type="button" id="close-payload-detail">닫기</button>
+    </div>
+    <div class="row" style="margin-top:8px;gap:6px">
+      <button type="button" class="chip-btn" id="payload-expand-all">모두 펼치기</button>
+      <button type="button" class="chip-btn" id="payload-collapse-all">모두 접기</button>
+      <span class="muted small">개인정보를 *** 처리한 발췌 텍스트입니다.</span>
+    </div>
+  </div>
+  <div id="payload-detail-body" style="display:flex;flex-direction:column;gap:8px;margin-top:10px">
+    {% for e in ready %}
+    <details class="save-preview-box payload-item" {{ 'open' if loop.length == 1 }}>
+      <summary>{{ loop.index }}. {{ e.title or e.name }}</summary>
+      <pre class="export-preview">{{ e.payload }}</pre>
+    </details>
+    {% endfor %}
+    <details class="save-preview-box">
+      <summary>비교에 사용하는 폴더 설명 ({{ folders|length }}개)</summary>
+      <ul class="small" style="margin:6px 0 0;padding-left:18px">{% for f in folders %}<li>{{ f }}</li>{% endfor %}</ul>
+    </details>
+  </div>
+  <div class="tz-foot row" style="justify-content:flex-end">
+    <button type="button" id="close-payload-detail-foot">닫기</button>
+  </div>
+</dialog>
+<script>
+(function(){
+  const dlg = document.getElementById('payload-detail-dlg');
+  const openBtn = document.getElementById('open-payload-detail');
+  if (!dlg || !openBtn) return;
+  openBtn.addEventListener('click', () => dlg.showModal());
+  ['close-payload-detail', 'close-payload-detail-foot'].forEach(id => {
+    const b = document.getElementById(id);
+    if (b) b.addEventListener('click', () => dlg.close());
+  });
+  dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
+  dlg.addEventListener('close', () => openBtn.focus());
+  const exp = document.getElementById('payload-expand-all');
+  const col = document.getElementById('payload-collapse-all');
+  if (exp) exp.addEventListener('click', () => dlg.querySelectorAll('.payload-item').forEach(d => d.open = true));
+  if (col) col.addEventListener('click', () => dlg.querySelectorAll('.payload-item').forEach(d => d.open = false));
+})();
+</script>
+{% endblock %}

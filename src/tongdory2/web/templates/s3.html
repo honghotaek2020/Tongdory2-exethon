@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+{% block title %}{{ '파일 이동 결과' if request.query_params.get('done') and final_catalog else '작업 기록' }}{% endblock %}
+{% block content %}
+{% if notice %}<div class="notice" data-notice-modal>{{ notice }}</div>{% endif %}
+
+{% set is_done_view = request.query_params.get('done') and selected_batch and final_catalog %}
+{% if is_done_view %}
+<section class="card done-summary-card" id="done-summary">
+  <div class="row" style="justify-content:space-between;align-items:flex-start">
+    <div>
+      <h2>{% if final_catalog.batch_status == 'EMPTY' and final_catalog.is_review_only %}파일 이동 없이 검토를 마쳤습니다{% elif final_catalog.is_undone %}이전 작업을 원래대로 되돌렸습니다{% elif final_catalog.is_partial_undo %}일부 파일을 원래 위치로 되돌렸습니다{% elif final_catalog.has_unresolved %}일부 파일을 옮기지 못했습니다{% else %}파일 {{ final_catalog.moved_count }}개를 옮겼습니다{% endif %}</h2>
+      <p class="hint" style="margin:0">{{ msg('done.summary.hint', root=final_catalog.root_display) }}</p>
+    </div>
+    <div class="row" style="gap:6px">
+      {% if final_catalog.is_undone %}
+      <span class="chip warn">{{ msg('done.status.undone') }}</span>
+      {% elif final_catalog.is_partial_undo %}
+      <span class="chip warn">{{ msg('done.status.partial_undo') }}</span>
+      {% elif final_catalog.batch_status == 'EMPTY' and final_catalog.is_review_only %}
+      <span class="chip ok">{{ msg('done.status.review_only') }}</span>
+      {% elif final_catalog.batch_status == 'DONE' and final_catalog.has_unresolved %}
+      <span class="chip warn">{{ msg('done.status.partial_done') }}</span>
+      {% elif final_catalog.batch_status != 'DONE' %}
+      <span class="chip">{{ {'EMPTY':'변경 없음','RUNNING':'실행 완료 기록 없음'}.get(final_catalog.batch_status, final_catalog.batch_status) }}</span>
+      {% endif %}
+      <button type="button" class="primary" data-open-final-catalog>{{ msg('catalog.card.btn') }}</button>
+    </div>
+  </div>
+  {% if final_catalog.is_undone %}
+  <div class="notice warn" style="margin:10px 0 0">{{ msg('done.notice.undone') }}</div>
+  {% elif final_catalog.is_partial_undo %}
+  <div class="notice warn" style="margin:10px 0 0">{{ msg('done.notice.partial_undo', count=final_catalog.undone_count) }}</div>
+  {% endif %}
+  <div class="done-kpis">
+    <div class="done-kpi ok">
+      <span class="small muted">{{ '되돌리지 않은 파일' if final_catalog.is_partial_undo else msg('done.kpi.moved') }}</span>
+      <strong>{{ final_catalog.moved_count }}개</strong>
+    </div>
+    <div class="done-kpi accent">
+      <span class="small muted">{{ msg('done.kpi.created_dirs') }}</span>
+      <strong>{{ final_catalog.created_dirs }}개</strong>
+    </div>
+    <div class="done-kpi muted-box">
+      <span class="small muted">{{ msg('done.kpi.left') }}</span>
+      <strong>{{ final_catalog.left_count }}개</strong>
+    </div>
+  </div>
+  {% include "_left_breakdown.html" %}
+  <p class="small ok-text" id="final-catalog-save-status" role="status" aria-live="polite" hidden></p>
+</section>
+
+<section class="card" id="final-catalog-table">
+  <div class="row" style="justify-content:space-between;margin-bottom:8px">
+    <div>
+      <h2>폴더별 정리 결과</h2>
+      <p class="hint" style="margin:0">선택한 작업에서 파일을 옮기거나 새로 만든 폴더입니다. 파일 목록에는 이 작업으로 이동한 파일만 표시합니다(민감 파일명 제외).</p>
+    </div>
+    <span class="small muted">{{ result_folders|length }}개 폴더</span>
+  </div>
+  {% if result_folders %}
+  <table>
+    <caption>폴더별 정리 결과</caption>
+    <thead><tr><th scope="col">폴더 경로</th><th scope="col">작업 결과</th><th class="hide-sm" scope="col">이동한 파일</th></tr></thead>
+    <tbody>
+    {% for r in result_folders %}
+      <tr>
+        <td class="path">{{ '저장 폴더 바로 아래' if r.path == '.' else r.path }} <span class="chip {{ 'ok' if r.created else '' }}">{{ '새로 만든 폴더' if r.created else '기존 폴더' }}</span>
+          {% if r.presence != 'exists' %}<span class="chip warn">{{ {'missing':'현재 없음', 'not_directory':'현재 폴더 아님'}.get(r.presence, '존재 확인 불가') }}</span>{% endif %}</td>
+        <td>{% if r.moved %}<span class="chip ok">이동 완료 {{ r.moved }}개</span>{% else %}<span class="chip ok">폴더 생성 완료</span>{% endif %}</td>
+        <td class="hide-sm muted">{% if r.files %}{{ r.files|join(', ') }}{% if r.unlisted %} 외 {{ r.unlisted }}개{% endif %}{% elif r.moved %}표시할 파일명 없음{% else %}—{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted">표시할 파일 이동·폴더 생성 결과가 없습니다. 실패·건너뜀·되돌림 내역은 작업 상세에서 확인할 수 있습니다.</p>{% endif %}
+</section>
+{% endif %}
+
+{% if left_breakdown and left_breakdown.plan_exclusions %}
+<section class="card" id="plan-exclusions">
+  <h2>이동 계획에서 제외된 파일</h2>
+  <ul>{% for entry in left_breakdown.plan_exclusions %}<li>{{ entry.name }} — {{ entry.reason | folder_reason }}</li>{% endfor %}</ul>
+</section>
+{% endif %}
+
+{% if sel and ops and is_done_view %}
+<details class="card" id="operation-details" style="display:block">
+  <summary class="row" style="justify-content:space-between;cursor:pointer">
+    <strong>이번 작업 상세 · 파일 이동 {{ final_catalog.moved_count }}개, 폴더 생성 {{ final_catalog.created_dirs }}개</strong>
+    <span class="small muted">작업 내역 보기</span>
+  </summary>
+  <div style="margin-top:12px">
+    <p class="small muted" style="margin:0 0 10px">작업 번호: {{ selected_batch.name }}</p>
+    {% set st = selected_batch.status %}
+    {% if st in ('DONE', 'PARTIAL_UNDO', 'RUNNING') %}
+    <form method="post" action="/s3/undo/{{ sel }}" data-busy="원래 위치로 되돌리고 있습니다" class="row" style="margin-bottom:10px">
+      <span class="muted small">원래 위치에 같은 이름의 파일이 있거나 이동 후 내용이 바뀐 파일은 건너뜁니다.</span>
+      <label class="row"><input type="checkbox" name="confirm" value="yes" required> 이 작업을 원래대로 되돌립니다</label>
+      <button type="submit">이 작업 되돌리기</button>
+    </form>
+    {% endif %}
+    {% set n_mv = ops|selectattr('op', 'in', ['MOVE', 'TRASH'])|list|length %}
+    {% if not n_mv %}<p class="muted">이동한 파일이 없는 작업입니다 (모든 파일 원래 자리에 둠).</p>{% endif %}
+    <table>
+    <caption>이번 작업의 처리 내역</caption>
+      <thead><tr><th scope="col">#</th><th scope="col">작업</th><th scope="col">원본 위치 → 작업 위치</th><th scope="col">결과</th></tr></thead>
+      <tbody>
+      {% for o in ops %}
+        <tr><td class="muted">{{ o.seq }}</td><td class="op">{{ {'MKDIR':'폴더 생성','MOVE':'이동','TRASH':'휴지통','WRITE_NEW':'새 파일','COPY':'복사'}[o.op] }}</td>
+          <td class="path">{% if o.src_d %}{{ o.src_d }} →<br>{% endif %}{{ o.dst_d }}</td>
+          <td>{% include "_operation_result.html" %}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</details>
+{% endif %}
+
+<section class="card">
+  <div class="row" style="justify-content:space-between">
+    <div>
+      <h2>작업 기록</h2>
+      <p class="hint">작업별 이동 내역을 확인하고 되돌리기를 요청할 수 있습니다. 변경되거나 원래 위치에 충돌이 있는 파일은 건너뜁니다. 파일을 영구 삭제하지 않습니다.</p>
+    </div>
+    <div class="row" style="gap:6px">
+      {% if can_export_catalog and not is_done_view %}
+      <button type="button" class="small" data-open-final-catalog>{{ msg('catalog.card.btn') }}</button>
+      {% endif %}
+      {% if batches %}
+      <div class="row" role="group" aria-label="작업 유형 필터">
+        <button type="button" class="chip-btn on" data-hfilter="all">전체</button>
+        <button type="button" class="chip-btn" data-hfilter="move">파일 정리</button>
+        <button type="button" class="chip-btn" data-hfilter="aux">인수인계·보관</button>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% if can_export_catalog and not is_done_view %}
+  <p class="small ok-text" id="final-catalog-save-status" role="status" aria-live="polite" hidden></p>
+  {% endif %}
+  {% if batches %}
+  <table id="history-batches">
+    <caption>작업 기록 목록</caption>
+    <thead><tr><th scope="col">작업 기록</th><th scope="col">결과</th><th scope="col">상태</th><th class="hide-sm" scope="col">시각</th></tr></thead>
+    <tbody>
+    {% for b in batches %}
+      {% set unresolved = (b.summary.denied or 0) + (b.summary.failed or 0) %}
+      <tr data-btype="{{ 'aux' if b.summary.label else 'move' }}">
+        <td data-label="작업 기록"><a href="/s3?batch={{ b.batch_id }}">{{ b.name }}</a></td>
+        <td data-label="결과"><div class="history-metrics">{% if b.summary.label %}<span>{{ b.summary.label }} 생성</span>{% endif %}{% if b.summary.copied %}<span>복사 {{ b.summary.copied }}개</span>{% endif %}<span>이동 {{ b.summary.moved or 0 }}개</span><span>폴더 생성 {{ b.summary.created_dirs or 0 }}개</span>{% if b.summary.skipped %}<span>건너뜀 {{ b.summary.skipped }}건</span>{% endif %}{% if b.summary.denied %}<span>차단 {{ b.summary.denied }}건</span>{% endif %}{% if b.summary.failed %}<span>실패 {{ b.summary.failed }}건</span>{% endif %}</div></td>
+        <td data-label="상태"><span class="chip {{ 'ok' if (b.status == 'DONE' and not unresolved) or (b.status == 'EMPTY' and b.summary.review_only) else 'warn' if (b.status == 'PARTIAL_UNDO' or unresolved) else '' }}">{{ '검토 완료(이동 없음)' if (b.status == 'EMPTY' and b.summary.review_only) else {'DONE':'완료','UNDONE':'되돌림','PARTIAL_UNDO':'일부 되돌림','EMPTY':'변경 없음','RUNNING':'실행 완료 기록 없음'}[b.status] }}</span>{% if unresolved %} <span class="chip warn">미해결 {{ unresolved }}</span>{% endif %}</td>
+        <td class="hide-sm muted">{{ b.created_at|localtime }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted">정리 작업 기록이 없습니다.</p>{% endif %}
+</section>
+
+{% if sel and ops and not is_done_view %}
+<section class="card" id="operation-details">
+  <div class="row" style="justify-content:space-between">
+    <h2>{{ selected_batch.name }} 상세</h2>
+    {% set st = selected_batch.status %}
+    {% if st in ('DONE', 'PARTIAL_UNDO', 'RUNNING') %}
+    <form method="post" action="/s3/undo/{{ sel }}" data-busy="원래 위치로 되돌리고 있습니다" class="row">
+      <span class="muted small">원래 위치에 같은 이름의 파일이 있거나 이동 후 내용이 바뀐 파일은 건너뜁니다.</span>
+      <label class="row"><input type="checkbox" name="confirm" value="yes" required> 이 작업을 원래대로 되돌립니다</label>
+      <button type="submit">이 작업 되돌리기</button>
+    </form>
+    {% endif %}
+  </div>
+  <h3 style="margin:8px 0 6px">작업별 처리 내역</h3>
+  {% set n_mv = ops|selectattr('op', 'in', ['MOVE', 'TRASH'])|list|length %}
+  {% if not n_mv %}<p class="muted">이동한 파일이 없는 작업입니다 (모든 파일 원래 자리에 둠).</p>{% endif %}
+  <table>
+    <caption>선택한 작업의 처리 내역</caption>
+    <thead><tr><th scope="col">#</th><th scope="col">작업</th><th scope="col">원본 위치 → 작업 위치</th><th scope="col">결과</th></tr></thead>
+    <tbody>
+    {% for o in ops %}
+      <tr><td class="muted">{{ o.seq }}</td><td class="op">{{ {'MKDIR':'폴더 생성','MOVE':'이동','TRASH':'휴지통','WRITE_NEW':'새 파일','COPY':'복사'}[o.op] }}</td>
+        <td class="path">{% if o.src_d %}{{ o.src_d }} →<br>{% endif %}{{ o.dst_d }}</td>
+        <td>{% include "_operation_result.html" %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+{% include "_final_catalog_modal.html" %}
+<script>
+document.querySelectorAll('[data-hfilter]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const f = btn.dataset.hfilter;
+    document.querySelectorAll('[data-hfilter]').forEach(b => b.classList.toggle('on', b === btn));
+    document.querySelectorAll('#history-batches tbody tr').forEach(tr => {
+      tr.style.display = (f === 'all' || tr.dataset.btype === f) ? '' : 'none';
+    });
+  });
+});
+</script>
+{% endblock %}

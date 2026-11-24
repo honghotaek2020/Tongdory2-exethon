@@ -1,0 +1,117 @@
+{% from "liner_usage.html" import usd, usage_summary %}
+
+<section class="card" id="liner-usage" aria-labelledby="liner-usage-title">
+  <div class="row liner-heading">
+    <div>
+      <h2 id="liner-usage-title">Liner 사용 현황 {% if has_liner_key %}<span class="chip ok">API 키 설정됨</span>{% else %}<span class="chip warn">API 키 없음</span>{% endif %}</h2>
+      <p class="hint">저장된 전체 작업 · 외부 호출 {{ liner_totals.external }}회 · 캐시 사용 {{ liner_totals.cached }}회 · 기록된 비용(추정값 포함) {{ usd(liner_totals.cost) }}{% if liner_totals.unreported %} · 비용 미기록 {{ liner_totals.unreported }}회(합계에 미포함){% endif %}</p>
+    </div>
+    <div class="row">
+      <a class="btn" href="/settings/liner">{{ 'API 키 변경' if has_liner_key else 'API 키 입력' }}</a>
+      <button id="show-liner-history" type="button" aria-haspopup="dialog" aria-controls="liner-history">사용 이력 보기</button>
+    </div>
+  </div>
+  <form method="post" action="/settings/liner-auto" id="liner-auto-form" class="liner-auto">
+    <input type="hidden" name="choice" value="{{ 'off' if liner_auto else 'on' }}">
+    <input type="hidden" name="next" value="/">
+    <label class="row"><input type="checkbox" id="liner-auto" {{ 'checked' if liner_auto }}>
+      내 PC 규칙으로 폴더를 못 정한 파일은 Liner에 파일명·폴더명을 보내 자동으로 폴더를 추천받기</label>
+    {% if liner_auto and not has_liner_key %}<span class="chip warn">API 키 등록 필요</span>{% endif %}
+  </form>
+</section>
+{% from "_liner_consent.html" import consent_dialog %}
+{% if not liner_auto %}{{ consent_dialog('liner-consent-again', False, has_liner_key) }}{% endif %}
+<script>
+(function(){
+  const box = document.getElementById('liner-auto');
+  const form = document.getElementById('liner-auto-form');
+  const again = document.getElementById('liner-consent-again');
+  box.addEventListener('change', () => {
+    if (box.checked && again) { again.showModal(); return; }  // 켜기는 안내 팝업에서 다시 확인
+    form.submit();                                            // 끄기는 바로
+  });
+  if (again) again.addEventListener('close', () => { box.checked = false; });
+})();
+</script>
+
+<dialog id="liner-history" class="liner-history" aria-labelledby="liner-history-title">
+  <div class="row liner-heading">
+    <h2 id="liner-history-title">Liner 사용 이력</h2>
+    <form method="dialog"><button type="submit" autofocus>닫기</button></form>
+  </div>
+  <p class="hint">저장된 전체 작업 합계 · 외부 호출 {{ liner_totals.external }}회 · 캐시 사용 {{ liner_totals.cached }}회 · 기록된 비용(추정값 포함) {{ usd(liner_totals.cost) }}{% if liner_totals.unreported %} · 비용 미기록 {{ liner_totals.unreported }}회(합계에 미포함){% endif %}</p>
+  {% if latest_liner_totals %}
+  <p class="hint">최근 분류 묶음 {{ s.notice.batch_number or 1 }} · 내 PC 분류 {{ s.latest_total }}개 · Liner 분석 대상 {{ s.notice.send_names or 0 }}개 · {{ usage_summary(latest_liner_totals, s.notice.reused_documents, latest_liner_totals.cost) }}</p>
+  {% endif %}
+  <h3>전체 작업 중 최근 선택 문서 분석</h3>
+  {% if liner_history %}
+  <p class="hint">비용은 Liner 호출에 대해 발생합니다. 알맞은 폴더를 찾지 못하거나 제안을 선택하지 않아도 호출 비용이 발생할 수 있습니다.</p>
+  <div class="liner-history-table" tabindex="0" role="region" aria-label="최근 선택 문서 분석 표, 가로로 스크롤 가능">
+    <table>
+    <caption>최근 선택 문서 분석 기록</caption>
+      <thead><tr><th scope="col">시각</th><th scope="col">분석 대상</th><th scope="col">비용(추정값 포함)</th></tr></thead>
+      <tbody>
+        {% for entry in liner_history %}
+        <tr>
+          <td>{{ entry.time|localtime }}</td>
+          <td>{{ entry.analyzed }}개{% if entry.selected is not none and entry.selected != entry.analyzed %} / 선택 {{ entry.selected }}개{% endif %}</td>
+          <td>{{ usd(entry.cost) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="muted">선택 문서 분석 기록이 없습니다.</p>{% endif %}
+  <div class="row liner-heading" style="margin-top:14px">
+    <h3 style="margin:0">전체 작업 중 최근 API 호출 (최대 30건)</h3>
+    <a class="btn small" href="/liner/usage.csv" download="liner_usage.csv">CSV 내려받기</a>
+  </div>
+  {% if liner_calls %}
+  <div class="row" style="margin:8px 0;gap:6px;flex-wrap:wrap">
+    <button type="button" class="chip-btn on" data-lfilter="all" aria-pressed="true">전체</button>
+    <button type="button" class="chip-btn" data-lfilter="external" aria-pressed="false">외부 호출</button>
+    <button type="button" class="chip-btn" data-lfilter="cached" aria-pressed="false">캐시 사용</button>
+    <input type="search" id="liner-search" placeholder="API·시각 검색" aria-label="API 호출 검색" style="margin-left:auto;min-width:160px;padding:4px 8px;border:1px solid var(--line);border-radius:6px;font-size:13px">
+  </div>
+  <div class="liner-history-table" tabindex="0" role="region" aria-label="최근 API 호출 표, 가로로 스크롤 가능">
+    <table id="liner-calls-table">
+    <caption>최근 API 호출 기록 · 필터는 이 표에만 적용</caption>
+      <thead><tr><th scope="col">시각</th><th scope="col">API</th><th scope="col">처리</th><th scope="col">비용(추정값 포함)</th></tr></thead>
+      <tbody>
+        {% for call in liner_calls %}
+        <tr data-lkind="{{ 'cached' if call.kind == 'CACHED' else 'external' }}">
+          <td>{{ call.time|localtime }}</td><td>{{ call.api }}</td>
+          <td>{{ '저장된 응답 재사용' if call.kind == 'CACHED' else '외부 호출' }}</td>
+          <td>{{ '캐시 사용' if call.kind == 'CACHED' else ('비용 미기록' if call.kind == 'NONE' else usd(call.cost)) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="muted">API 호출 기록이 없습니다.</p>{% endif %}
+</dialog>
+<script>
+document.getElementById('show-liner-history').addEventListener('click', () => {
+  document.getElementById('liner-history').showModal();
+});
+(function(){
+  let kind = 'all';
+  const search = document.getElementById('liner-search');
+  function filterCalls(){
+    const q = (search ? search.value : '').trim().toLowerCase();
+    document.querySelectorAll('#liner-calls-table tbody tr').forEach(tr => {
+      const okKind = kind === 'all' || tr.dataset.lkind === kind;
+      const okText = !q || tr.textContent.toLowerCase().includes(q);
+      tr.style.display = (okKind && okText) ? '' : 'none';
+    });
+  }
+  document.querySelectorAll('[data-lfilter]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      kind = btn.dataset.lfilter;
+      document.querySelectorAll('[data-lfilter]').forEach(b => { b.classList.toggle('on', b === btn); b.setAttribute('aria-pressed', b === btn); });
+      filterCalls();
+    });
+  });
+  if (search) search.addEventListener('input', filterCalls);
+})();
+</script>

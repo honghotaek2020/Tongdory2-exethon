@@ -1,0 +1,9 @@
+{% macro usd(value) -%}
+  ${{ ('%.6f'|format(value)).rstrip('0').rstrip('.') if value else '0' }}
+{%- endmacro %}
+
+{% macro usage_summary(usage, reused, cost) -%}
+  외부 호출 {{ usage.external }}회 · 응답 캐시 재사용 {{ usage.cached }}회
+  {%- if reused %} · 이동할 폴더 제안 재사용 {{ reused }}개{% endif %} · 비용(추정값 포함) {{ usd(cost) }}
+  {%- if usage.unreported %} · 비용 미기록 호출 {{ usage.unreported }}회{% endif %}
+{%- endmacro %}

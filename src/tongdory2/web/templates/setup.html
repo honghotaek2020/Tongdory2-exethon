@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+{% block title %}{{ stages[stage] }}{% endblock %}
+{% block page_heading %}{{ 1 if stage == "structure" else 2 if stage == "sources" else 3 }}. {{ stages[stage] }}{% endblock %}
+{% block content %}
+<div class="setup-page">
+  <nav class="setup-tabs" aria-label="설정 순서">
+    {% for id, label in stages.items() %}
+      <span {% if stage == id %}aria-current="step"{% endif %}>{{ loop.index }}. {{ label }}</span>
+    {% endfor %}
+  </nav>
+  {% set stage_num = 1 if stage == 'structure' else 2 if stage == 'sources' else 3 %}
+  {% if stage == "structure" %}
+  <p class="setup-structure-intro">{{ msg('setup.structure.intro') }}</p>
+  {% endif %}
+  {% if flash %}<div class="notice" role="status" data-notice-modal>{{ flash }}</div>{% endif %}
+  {% if error %}<div class="notice warn" role="alert" data-notice-modal>{{ error }}</div>{% endif %}
+  {# 폴더 사용 조건: 팝업 대신 체크박스 바로 위에 접힌 한 줄로 보여 주고, 누르면 펼친다 #}
+  {% macro warning_check() %}
+  <details class="setup-conditions">
+    <summary><strong>폴더 사용 조건 {{ warnings|length }}건</strong> <span class="muted">· 눌러서 내용 보기</span></summary>
+    <ul>{% for warning in warnings %}<li>{{ warning }}</li>{% endfor %}</ul>
+  </details>
+  <label class="setup-check"><input name="confirm_warnings" type="checkbox" value="true" required> 위 폴더의 사용 조건을 확인했습니다.</label>
+  {% endmacro %}
+
+  <script id="tongdory-messages" type="application/json">{{ js_messages('setup.', 'export.') | tojson }}</script>
+  {% if stage == "structure" %}
+    <section class="setup-box setup-structure-section" aria-labelledby="setup-import-title">
+      <div class="setup-section-head">
+        <h2 class="setup-section-title" id="setup-import-title"><span class="setup-section-number">1</span> {{ msg('setup.import.title') }}</h2>
+      </div>
+      <div class="setup-options">
+        <form class="setup-box setup-source-card" id="reference-import-form" action="/setup/structure/preview" method="post" enctype="multipart/form-data">
+          <input type="hidden" name="current_paths" value="">
+          <input id="reference" type="hidden" name="reference" value="{{ reference or '' }}">
+          <h3>{{ msg('setup.import.folder.title') }}</h3>
+          <p class="hint">{{ msg('setup.import.folder.desc') }}</p>
+          <div class="setup-source-actions">
+            <button type="button" class="setup-select" data-browse="reference">{{ msg('setup.import.folder.btn') }}</button>
+          </div>
+        </form>
+        <form class="setup-box setup-source-card" id="document-import-form" action="/setup/structure/preview" method="post" enctype="multipart/form-data">
+          <input type="hidden" name="current_paths" value="">
+          <h3>{{ msg('setup.import.file.title') }}</h3>
+          <p class="hint" id="structure-file-types">{{ msg('setup.import.file.desc') }}</p>
+          <div class="setup-source-actions">
+            <input id="document" type="file" name="document" accept=".json,.txt" aria-label="{{ msg('setup.import.file.aria') }}" aria-describedby="structure-file-types" required>
+            <button type="button" class="setup-select" id="choose-structure-file" aria-describedby="structure-file-types" hidden>{{ msg('setup.import.file.btn') }}</button>
+            <noscript><button type="submit">{{ msg('setup.import.file.submit') }}</button></noscript>
+          </div>
+        </form>
+        <div class="setup-box setup-source-card">
+          <h3>{{ msg('setup.import.preset.title') }}</h3>
+          <p class="hint">{{ msg('setup.import.preset.desc') }}</p>
+          <div class="setup-source-actions">
+            <button type="button" class="setup-select" id="fill-default-template" data-template="{{ default_template_text }}">{{ msg('setup.import.preset.btn') }}</button>
+          </div>
+        </div>
+      </div>
+    </section>
+    <div class="setup-flow-link" aria-hidden="true"><i>↓</i><span>{{ msg('setup.flow.link') }}</span></div>
+    <form class="setup-box setup-structure-list{{ ' is-fresh' if imported_from else '' }}" id="setup-list-card" action="/setup/structure" method="post" aria-labelledby="setup-list-title" data-imported="{{ '1' if imported_from else '0' }}" data-preserve-draft="{{ '1' if preserve_draft else '0' }}">
+      <input type="hidden" name="revision" value="{{ revision }}">
+      <input type="hidden" name="reference" value="{{ reference or '' }}">
+      {% if imported_from %}
+      <p class="setup-import-result is-fresh" id="import-notice" role="status">
+        <span><strong>{{ msg('setup.list.imported_done', count=imported_count) }}</strong> {{ msg('setup.list.imported_guide') }}</span>
+        <span class="go-preview">{{ msg('setup.list.imported_preview_note') }}</span>
+      </p>
+      {% endif %}
+      <div class="setup-list-heading">
+        <h2 class="setup-section-title" id="setup-list-title"><span class="setup-section-number">2</span> {{ msg('setup.list.title.imported') if imported_from else msg('setup.list.title.default') }}</h2>
+        <span class="small muted setup-editable-note">{{ msg('setup.list.editable_note') }}</span>
+        <div class="row setup-list-meta" id="structure-live-stats" aria-live="polite" aria-atomic="true">
+          <span class="chip setup-source-chip" id="structure-source"{% if not imported_from %} hidden{% endif %}>{% if imported_from %}{{ msg('setup.list.source.file', name=imported_from) if imported_kind == 'file' else msg('setup.list.source.folder', name=imported_from) }}{% endif %}</span>
+          <span class="chip" id="structure-total"{% if not imported_from %} hidden{% endif %}>{% if imported_from %}{{ msg('setup.list.total_folders', count=imported_count) }}{% endif %}</span>
+          <span class="chip ok" id="structure-required"{% if not imported_from %} hidden{% endif %}>{% if imported_from %}{{ msg('setup.list.required_count', count=required|length) }}{% endif %}</span>
+        </div>
+      </div>
+      <textarea id="structure-list" class="setup-editor" name="paths" rows="10" spellcheck="false" aria-labelledby="setup-list-title" aria-describedby="structure-list-help" placeholder="01.착수/01.과제수행계획서 [필수]&#10;08.보고/02.회의록" required autocorrect="off" autocapitalize="none">{{ paths }}</textarea>
+      <div id="structure-live-error" class="notice warn" role="status" hidden></div>
+      <div class="setup-list-help">
+        <p class="hint" id="structure-list-help">{{ msg('setup.list.help_prefix') }}<strong>[필수]</strong>{{ msg('setup.list.help_suffix') }}</p>
+      </div>
+      {% if unnumbered %}
+      <details><summary>{{ msg('setup.list.unnumbered_summary', count=unnumbered|length) }}</summary>
+        <p class="hint">{{ msg('setup.list.unnumbered_hint') }}</p>
+        <ul>{% for path in unnumbered %}<li>{{ path }}</li>{% endfor %}</ul>
+      </details>
+      {% endif %}
+      <div class="setup-save-area">
+        <div>
+          <strong>{{ msg('setup.save.strip.title') }} <span class="muted" style="font-weight:500">{{ msg('setup.save.strip.optional') }}</span></strong>
+          <p class="hint" style="margin:2px 0 0">{{ msg('setup.save.strip.desc') }}</p>
+          <p class="small ok-text" id="structure-save-status" role="status" aria-live="polite" hidden></p>
+        </div>
+        <button type="button" class="setup-select" id="open-structure-save" data-allow-readonly>{{ msg('setup.save.strip.btn') }}</button>
+      </div>
+      <div class="setup-actions setup-actions-divider">
+        <span class="small muted">{{ msg('setup.actions.skip_hint') }}</span>
+        <button class="primary">{{ msg('setup.actions.confirm_next') }}</button>
+      </div>
+    </form>
+    <div class="preview-bottom" id="setup-save-guide">
+      <strong>{{ msg('setup.tree.bottom.title') }}</strong> {{ msg('setup.tree.bottom.line') }}
+    </div>
+
+    <dialog id="save-structure-dlg" class="save-modal" aria-labelledby="save-struct-title" data-allow-readonly>
+      <div class="row browser-heading">
+        <h2 id="save-struct-title">{{ msg('setup.save.modal.title') }}</h2>
+        <button type="button" id="save-struct-close">{{ msg('setup.save.modal.close') }}</button>
+      </div>
+      <p class="hint" style="margin:6px 0 12px">{{ msg('setup.save.modal.desc') }}</p>
+      <fieldset class="fmt-group">
+        <legend>{{ msg('setup.save.modal.fmt_legend') }}</legend>
+        <label class="fmt-opt">
+          <input type="radio" name="save_struct_fmt" value="json" checked>
+          <span><strong>{{ msg('setup.save.modal.fmt_json_title') }}</strong> <span class="chip ok">{{ msg('setup.save.modal.fmt_recommended') }}</span><br>
+            <small class="muted">{{ msg('setup.save.modal.fmt_json_desc') }}</small></span>
+        </label>
+        <label class="fmt-opt">
+          <input type="radio" name="save_struct_fmt" value="txt">
+          <span><strong>{{ msg('setup.save.modal.fmt_txt_title') }}</strong><br>
+            <small class="muted">{{ msg('setup.save.modal.fmt_txt_desc') }}</small></span>
+        </label>
+      </fieldset>
+      <div class="save-field">
+        <label for="save-struct-name">{{ msg('setup.save.modal.name_label') }}</label>
+        <div class="row" style="flex-wrap:nowrap">
+          <input id="save-struct-name" type="text" value="{{ default_export_stem }}" data-default-stem="{{ default_export_stem }}" placeholder="{{ folder_list_stem }}" autocorrect="off" autocapitalize="none" spellcheck="false">
+          <button type="button" data-browse="save-struct-dir" style="white-space:nowrap">{{ msg('setup.save.modal.dir_choose') }}</button>
+        </div>
+        <input id="save-struct-dir" type="hidden" value="">
+        <div class="save-loc-row">
+          <span class="small muted">{{ msg('setup.save.modal.loc_label') }} <span id="save-struct-loc" class="path"></span></span>
+          <button type="button" id="save-struct-dir-reset" class="link-btn" hidden>{{ msg('setup.save.modal.dir_reset') }}</button>
+        </div>
+      </div>
+      <p id="save-struct-summary" class="small muted" style="margin:8px 0"></p>
+      <details class="save-preview-box">
+        <summary>{{ msg('setup.save.modal.preview_summary') }}</summary>
+        <pre id="save-struct-preview" class="export-preview"></pre>
+      </details>
+      <div id="save-struct-error" class="notice warn" role="alert" hidden></div>
+      <div class="setup-actions" style="margin-top:12px">
+        <button type="button" id="save-struct-cancel">{{ msg('setup.save.modal.cancel') }}</button>
+        <button type="button" class="primary" id="save-struct-submit">{{ msg('setup.save.modal.submit') }}</button>
+      </div>
+    </dialog>
+
+    <dialog id="import-confirm-dlg" class="save-modal" aria-labelledby="import-confirm-title">
+      <div class="row browser-heading">
+        <h2 id="import-confirm-title">{{ msg('setup.confirm.title') }}</h2>
+        <button type="button" id="import-confirm-close">{{ msg('setup.save.modal.close') }}</button>
+      </div>
+      <p id="import-confirm-msg" class="hint" style="margin:8px 0 12px">{{ msg('setup.confirm.default_msg') }}</p>
+      <div class="setup-actions">
+        <button type="button" id="import-confirm-cancel">{{ msg('setup.confirm.cancel') }}</button>
+        <button type="button" class="primary" id="import-confirm-ok">{{ msg('setup.confirm.ok') }}</button>
+      </div>
+    </dialog>
+  {% elif stage == "sources" %}
+    <p class="setup-structure-intro">정리 대상 폴더를 선택합니다. 선택한 폴더의 하위 폴더도 함께 살펴봅니다.</p>
+    <form class="setup-box" method="post" aria-labelledby="setup-sources-title">
+      <input type="hidden" name="revision" value="{{ revision }}">
+      <div class="setup-section-head">
+        <h2 class="setup-section-title" id="setup-sources-title">정리 대상 폴더 선택</h2>
+      </div>
+      <label for="source-paths">선택한 폴더</label>
+      <textarea id="source-paths" name="paths" rows="5" placeholder="~/Desktop&#10;~/Downloads" required autocorrect="off" autocapitalize="none" spellcheck="false">{{ sources }}</textarea>
+      <div class="row">
+        <button type="button" data-add="~/Desktop">바탕화면 추가</button>
+        <button type="button" data-add="~/Downloads">다운로드 추가</button>
+        <button type="button" data-browse="source-paths" data-browse-multi="1">폴더 찾아보기</button>
+      </div>
+      {% if warnings %}{{ warning_check() }}{% endif %}
+      <div class="setup-actions"><a class="link" href="/setup/structure">이전</a><button class="primary">정리 대상 폴더 확정하고 다음</button></div>
+    </form>
+  {% else %}
+    <p class="setup-structure-intro">정리한 파일을 모을 폴더 한 곳을 선택합니다. 파일 이동을 승인하면 필요한 하위 폴더를 이 위치에 만듭니다.</p>
+    <form class="setup-box" method="post" aria-labelledby="setup-dest-title">
+      <input type="hidden" name="revision" value="{{ revision }}">
+      <div class="setup-section-head">
+        <h2 class="setup-section-title" id="setup-dest-title">저장 폴더 선택</h2>
+      </div>
+      <label for="destination-path">저장 폴더</label>
+      <input id="destination-path" type="text" name="path" value="{{ destination }}" placeholder="~/Documents/정리된 개발자료" required autocorrect="off" autocapitalize="none" spellcheck="false">
+      <div class="row"><button type="button" data-browse="destination-path">폴더 찾아보기</button></div>
+      {% if warnings %}{{ warning_check() }}{% endif %}
+      <div class="setup-actions"><a class="link" href="/setup/sources">이전</a><button class="primary">저장 폴더 확정</button></div>
+    </form>
+  {% endif %}
+</div>
+
+<dialog id="folder-browser" class="folder-browser" aria-labelledby="browser-title" data-allow-readonly>
+  <div class="row browser-heading"><h2 id="browser-title">폴더 찾아보기</h2><button id="browser-close" type="button">닫기</button></div>
+  <p id="browser-path" class="muted"></p>
+  <div id="browser-list" class="browser-list"></div>
+  <p id="browser-error" role="status"></p>
+  <div class="setup-actions"><button id="browser-parent" type="button">상위 폴더</button><button id="browser-use" class="primary" type="button">이 폴더 선택</button></div>
+</dialog>
+<script src="/static/setup.js?v=20261122-brand" defer></script>
+{% endblock %}

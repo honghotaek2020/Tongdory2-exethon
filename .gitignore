@@ -1,0 +1,27 @@
+# 비밀값: Liner API 키는 앱 화면에서 입력하며 저장소에 두지 않는다
+.env
+.env.*
+!.env.example
+
+# Python·도구
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# 실행·빌드 결과
+*.db
+*.db-wal
+*.db-shm
+*.log
+demo/
+dist/
+build/
+/src/dist/
+
+# OS·편집기
+.DS_Store
+Thumbs.db
+~$*

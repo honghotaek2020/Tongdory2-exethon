@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% from "_liner_key_cta.html" import key_cta %}
+{% block title %}공개 규격 찾기{% endblock %}
+{% block content %}
+<section class="card std-page">
+  <p class="hint">규격 번호를 넣으면 Liner 검색으로 그 규격의 공식 문서 링크를 찾습니다. 보내는 것은 규격 번호로 만든 검색어뿐입니다.</p>
+  {% if error %}<p class="notice warn" role="alert">{{ error }}</p>{% endif %}
+
+  <div class="std-block">
+    <h3><span class="std-step">1</span> 규격 번호</h3>
+    <form method="get" action="/s2/standards" class="std-row">
+      {% if return_to %}<input type="hidden" name="return_to" value="{{ return_to }}">{% endif %}
+      <input type="text" id="standard-identifier" aria-label="공개 규격 번호" autocorrect="off" autocapitalize="none" spellcheck="false"
+             name="identifier" value="{{ identifier }}" placeholder="예: RFC 8446 · SGP.22 · ISO 27001 · TS 33.501" required>
+      <button type="submit">검색어 만들기</button>
+    </form>
+  </div>
+
+  {% if query and results is none %}
+  <div class="std-block">
+    <h3><span class="std-step">2</span> Liner에 보낼 검색어</h3>
+    <div class="std-row">
+      <code class="std-query">{{ query }}</code>
+      {% if has_key %}
+      <form method="post" action="/s2/standards" data-busy="Liner로 공개 규격을 검색하고 있습니다">
+        {% if return_to %}<input type="hidden" name="return_to" value="{{ return_to }}">{% endif %}
+        <input type="hidden" name="identifier" value="{{ identifier }}">
+        <input type="hidden" name="approval" value="{{ approval }}">
+        <button class="primary" type="submit">이 검색어로 검색</button>
+      </form>
+      {% else %}{{ key_cta(request.url.path ~ ('?' ~ request.url.query if request.url.query else ''), 'API 키 등록하고 검색') }}{% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if results is not none %}
+  <div class="std-block">
+    <h3><span class="std-step">3</span> 검색 결과 <span class="muted small">링크에서 공식 발행처와 버전을 확인하세요</span></h3>
+    <ul class="std-results">
+      {% for item in results %}
+      <li><a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">{{ item.title or item.url }}</a></li>
+      {% else %}<li class="muted">검색 결과가 없습니다.</li>{% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <div class="std-foot"><a class="btn" href="{{ back_url }}">{{ '상황판으로 돌아가기' if back_url == '/' else '검토 화면으로 돌아가기' }}</a></div>
+</section>
+{% endblock %}

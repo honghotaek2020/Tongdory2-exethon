@@ -1,0 +1,20 @@
+{% macro rate_bar(r, compact=False) %}{% if r and r.target and compact %}
+<div class="rate compact" role="group" aria-label="이동 위치 결정률">
+  <div class="row" style="justify-content:space-between">
+    <span><strong>이동 위치 결정률 {{ r.pct }}%</strong> <span class="muted small">{{ r.placed }} / {{ r.target }}개{% if r.hold %} · 직접 확인 {{ r.hold }}개{% endif %}</span></span>
+    <details class="inline-more"><summary class="small">계산 기준</summary>
+      <p class="hint">분류 결과 기준이며 선택 여부·실제 이동은 반영하지 않습니다.{% if r.excluded %} 원래 위치에 둘 파일 {{ r.excluded }}개는 제외합니다.{% endif %}{% if r.grouped %} 묶음 분류 {{ r.grouped }}개 포함.{% endif %}{% if r.etc %} 낱개 {{ r.etc }}개를 '기타'로 보내면 {{ r.with_etc }}%.{% endif %}</p></details>
+  </div>
+  <div class="meter"><span style="width:{{ r.pct }}%"></span>{% if r.etc %}<span class="etc" style="width:{{ r.with_etc - r.pct }}%"></span>{% endif %}</div>
+</div>
+{% elif r and r.target %}
+<div class="rate" role="group" aria-label="이동 위치 결정률">
+  <div class="row" style="justify-content:space-between">
+    <strong>이동 위치 결정률 {{ r.pct }}%</strong>
+    <span class="muted small">위치 제안 {{ r.placed }}개 / 정리 대상 {{ r.target }}개{% if r.excluded %} · 원래 위치에 둘 파일 {{ r.excluded }}개는 계산에서 제외합니다.{% endif %}</span>
+  </div>
+  <p class="hint" style="margin:4px 0">분류 결과를 기준으로 계산합니다. 선택 여부와 실제 이동 결과는 반영하지 않습니다.</p>
+  <div class="meter"><span style="width:{{ r.pct }}%"></span>{% if r.etc %}<span class="etc" style="width:{{ r.with_etc - r.pct }}%"></span>{% endif %}</div>
+  <p class="hint" style="margin:4px 0 0">{% if r.grouped %}묶음으로 분류한 파일 {{ r.grouped }}개 포함. {% endif %}{% if r.etc %}낱개 파일 {{ r.etc }}개를 '기타' 폴더 이동 대상으로 선택하면 {{ r.with_etc }}%{% if r.hold %} · {% endif %}{% endif %}{% if r.hold %}직접 확인 {{ r.hold }}개{% endif %}</p>
+</div>
+{% endif %}{% endmacro %}

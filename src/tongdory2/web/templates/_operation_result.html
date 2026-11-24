@@ -1,0 +1,4 @@
+<span class="chip {{ o.display_result.tone }}">{{ o.display_result.label }}</span>
+{% if o.display_result.reason %}<span class="muted operation-reason">{{ o.display_result.reason }}</span>
+<details class="why"><summary>오류 코드 보기</summary><code>{{ o.display_result.code }}</code></details>{% endif %}
+{% if o.display_result.undo_label %}<span class="chip operation-undo">되돌리기: {{ o.display_result.undo_label }}</span>{% endif %}

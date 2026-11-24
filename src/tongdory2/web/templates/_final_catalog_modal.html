@@ -1,0 +1,70 @@
+{% if can_export_catalog or final_catalog %}
+<script id="tongdory-messages" type="application/json">{{ js_messages('catalog.', 'setup.save.modal.', 'export.') | tojson }}</script>
+<dialog id="final-catalog-dlg" class="save-modal" aria-labelledby="final-cat-title" data-batch="{{ (final_catalog.batch_id if final_catalog else catalog_batch_id) or '' }}">
+  <div class="row browser-heading">
+    <h2 id="final-cat-title">{{ msg('catalog.modal.title') }}</h2>
+    <button type="button" id="final-cat-close">{{ msg('setup.save.modal.close') }}</button>
+  </div>
+  <p class="hint" style="margin:6px 0 12px">{{ msg('catalog.modal.desc') }}</p>
+  <div id="final-cat-state-warn" class="notice warn" style="margin-bottom:10px" {% if not (final_catalog and (final_catalog.is_undone or final_catalog.is_partial_undo)) %}hidden{% endif %}>
+    {% if final_catalog and final_catalog.is_undone %}{{ msg('catalog.modal.undone_warn') }}
+    {% elif final_catalog and final_catalog.is_partial_undo %}{{ msg('catalog.modal.partial_undo_warn', count=final_catalog.undone_count) }}{% endif %}
+  </div>
+  <fieldset class="fmt-group">
+    <legend>{{ msg('catalog.modal.fmt_legend') }}</legend>
+    <label class="fmt-opt">
+      <input type="radio" name="final_cat_fmt" value="md" checked>
+      <span><strong>{{ msg('catalog.modal.fmt_md_title') }}</strong> <span class="chip ok">{{ msg('setup.save.modal.fmt_recommended') }}</span><br>
+        <small class="muted">{{ msg('catalog.modal.fmt_md_desc') }}</small></span>
+    </label>
+    <label class="fmt-opt">
+      <input type="radio" name="final_cat_fmt" value="json">
+      <span><strong>{{ msg('catalog.modal.fmt_json_title') }}</strong><br>
+        <small class="muted">{{ msg('catalog.modal.fmt_json_desc') }}</small></span>
+    </label>
+    <label class="fmt-opt">
+      <input type="radio" name="final_cat_fmt" value="txt">
+      <span><strong>{{ msg('catalog.modal.fmt_txt_title') }}</strong><br>
+        <small class="muted">{{ msg('catalog.modal.fmt_txt_desc') }}</small></span>
+    </label>
+  </fieldset>
+  <div class="save-field">
+    <label for="final-cat-name">{{ msg('setup.save.modal.name_label') }}</label>
+    <div class="row" style="gap:8px;align-items:center">
+      <span class="small muted" style="min-width:64px">파일 이름</span>
+      <input id="final-cat-name" type="text" value="{{ default_catalog_stem }}" data-default-stem="{{ default_catalog_stem }}" placeholder="정리결과" style="flex:1" autocorrect="off" autocapitalize="none" spellcheck="false">
+    </div>
+    <input id="final-cat-dir" type="hidden" value="">
+    <div class="save-loc-row">
+      <span class="small muted"><span style="display:inline-block;min-width:64px">파일 저장 위치</span> <span id="final-cat-dir-label" class="path">기본 다운로드 폴더</span></span>
+      <div class="row" style="gap:6px">
+        <button type="button" id="final-cat-browse" class="small" style="white-space:nowrap">{{ msg('setup.save.modal.dir_choose') }}</button>
+        <button type="button" id="final-cat-dir-reset" class="link-btn" hidden>{{ msg('setup.save.modal.dir_reset') }}</button>
+      </div>
+    </div>
+    <div class="save-loc-row">
+      <span class="small muted"><span style="display:inline-block;min-width:64px">{{ msg('setup.save.modal.loc_label') }}</span> <span id="final-cat-loc" class="path"></span></span>
+    </div>
+  </div>
+  <p id="final-cat-summary" class="small muted" style="margin:8px 0">{% if final_catalog %}폴더 {{ final_catalog.total_folders }}개 · 파일 {{ final_catalog.total_files }}개 · 필수 산출물 확인 {{ final_catalog.required_ok }}/{{ final_catalog.required_total }}개{% if final_catalog.excluded_sensitive %} · 민감 파일 {{ final_catalog.excluded_sensitive }}개 제외{% endif %}{% else %}{{ msg('catalog.modal.loading_summary') }}{% endif %}</p>
+  <p id="final-cat-trunc" class="small muted" style="margin:0 0 8px" {% if not (final_catalog and final_catalog.truncated_folders) %}hidden{% endif %}>{% if final_catalog and final_catalog.truncated_folders %}{{ msg('catalog.card.truncated', count=final_catalog.truncated_folders) }}{% endif %}</p>
+  <details class="save-preview-box" id="final-cat-preview-details">
+    <summary>{{ msg('setup.save.modal.preview_summary') }}</summary>
+    <pre id="final-cat-preview" class="export-preview">{{ msg('catalog.modal.loading_preview') }}</pre>
+  </details>
+  <div id="final-cat-error" class="notice warn" role="alert" hidden></div>
+  <div class="setup-actions" style="margin-top:12px">
+    <button type="button" id="final-cat-cancel">{{ msg('setup.save.modal.cancel') }}</button>
+    <button type="button" class="primary" id="final-cat-submit">{{ msg('setup.save.modal.submit') }}</button>
+  </div>
+</dialog>
+
+<dialog id="catalog-folder-browser" class="folder-browser" aria-labelledby="cat-browser-title">
+  <div class="row browser-heading"><h2 id="cat-browser-title">{{ msg('catalog.modal.browser_title') }}</h2><button id="cat-browser-close" type="button">{{ msg('setup.save.modal.close') }}</button></div>
+  <p id="cat-browser-path" class="muted"></p>
+  <div id="cat-browser-list" class="browser-list"></div>
+  <p id="cat-browser-error" role="status"></p>
+  <div class="setup-actions"><button id="cat-browser-parent" type="button">{{ msg('catalog.modal.browser_parent') }}</button><button id="cat-browser-use" class="primary" type="button">{{ msg('catalog.modal.browser_use') }}</button></div>
+</dialog>
+<script src="/static/catalog_export.js" defer></script>
+{% endif %}

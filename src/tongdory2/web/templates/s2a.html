@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% from "liner_usage.html" import usage_summary %}
+{% block title %}협업 문서 목록{% endblock %}
+{% block content %}
+{% if notice %}<div class="notice" data-notice-modal>{{ notice }}</div>{% endif %}
+{% if error %}<div class="notice warn" role="alert">{{ error }}</div>{% endif %}
+<section class="card" id="targets">
+  <details {{ 'open' if not ips or error or warnings }}>
+    <summary>대상 폴더 설정</summary>
+    <form method="post" action="/s2a/targets" class="target-form" aria-label="협업 문서 대상 폴더 설정">
+      <input type="hidden" name="revision" value="{{ revision }}">
+      <p class="hint">협업 문서를 확인할 폴더의 전체 경로를 한 줄에 하나씩 입력하세요. 모두 비우고 저장하면 등록을 해제합니다. 실제 폴더와 파일은 그대로 유지됩니다.</p>
+      <div class="form-field">
+      <label for="target-paths">협업 문서 대상 폴더</label>
+      <textarea id="target-paths" name="paths" rows="4" autocorrect="off" autocapitalize="none" spellcheck="false" placeholder="~/Documents/개발과제/docs">{{ target_paths }}</textarea>
+      </div>
+      <div class="form-field">
+      <label for="target-link">문서 색인을 만들 저장 위치</label>
+      <select id="target-link" name="linked">
+        <option value="keep" {{ 'selected' if target_link == 'keep' }}>기존 연결 유지 (새 대상은 관리용 보관함)</option>
+        <option value="" {{ 'selected' if target_link == '' }}>관리용 보관함의 내보내기 폴더</option>
+        {% for root_id, display in currents %}<option value="{{ root_id }}" {{ 'selected' if target_link == root_id }}>{{ display }}</option>{% endfor %}
+      </select>
+      </div>
+      {% if warnings %}
+      <div class="notice warn">{% for warning in warnings %}<p>{{ warning }}</p>{% endfor %}</div>
+      <label><input type="checkbox" name="confirm_warnings" value="true" required> 경고 내용을 확인했습니다.</label>
+      {% endif %}
+      <p><button type="submit" class="primary">대상 저장</button></p>
+    </form>
+  </details>
+</section>
+<section class="card">
+  <div class="row" style="justify-content:space-between">
+    <div>
+      <h2>협업 문서 목록</h2>
+      <p class="hint">{{ ips|join(', ') or '대상 없음' }} · 문서를 옮기거나 고치지 않습니다. 도구 설정 파일과 민감 문서는 내용을 보내지 않습니다.</p>
+    </div>
+    <div class="row">
+      <form method="post" action="/s2a/analyze"><button class="{{ '' if run else 'primary' }}" type="submit">{{ '다시 분석' if run else '분석 시작' }}</button></form>
+    </div>
+  </div>
+  {% if not ips %}<div class="notice warn" style="margin-top:8px">협업 문서를 확인할 폴더를 먼저 등록해 주세요.
+    <a class="btn primary" href="#targets">대상 폴더 설정</a></div>{% endif %}
+  {% if run %}
+  <div class="row" style="margin-top:8px">
+    <span class="chip">Markdown 문서 {{ summary.md_total }}개</span>
+    <span class="chip danger">Git에서 관리하지 않는 문서 {{ summary.not_in_git }}개 (Git 제외 파일 {{ summary.ignored }}개 · 미추적 파일 {{ summary.untracked }}개)</span>
+    <span class="chip">이번 달 {{ summary.this_month }}개</span>
+    <span class="chip">관련 폴더 확인 {{ verdicts['JOIN'] or 0 }} · 보류 {{ verdicts['HOLD'] or 0 }} · 제외 {{ verdicts['EXCLUDE'] or 0 }} · 중복 {{ verdicts['DUP'] or 0 }}</span>
+    <span class="muted">{{ usage_summary(liner_usage, 0, run.cost_usd) }}</span>
+  </div>
+  {% if run.error %}<div class="notice warn">오류: {{ run.error | error_text }}</div>{% endif %}
+  {% if ips %}
+  <form method="post" action="/s2a/index" class="row" style="margin-top:10px">
+    <button class="primary" type="submit">문서 색인 만들기</button>
+    <span class="muted">연결된 현재 과제 폴더에 README_문서색인.md를 새 파일로 만듭니다. 같은 이름이 있으면 덮어쓰지 않습니다.</span>
+  </form>
+  {% else %}<p class="hint">협업 문서 대상이 등록되어 있지 않아 색인을 만들 수 없습니다(이전 분석 결과만 표시).</p>{% endif %}
+  {% endif %}
+</section>
+
+{% for dt in order %}{% if groups[dt] %}
+<section class="card review-card">
+  <h2>{{ labels[dt] }} <span class="muted">{{ groups[dt]|length }}</span></h2>
+  <table>
+    <caption>{{ labels[dt] }} 협업 문서 목록</caption>
+    <thead><tr><th scope="col">문서</th><th scope="col">관련 산출물 폴더</th><th scope="col">Git</th><th class="hide-sm" scope="col">근거</th></tr></thead>
+    <tbody>
+    {% for e in groups[dt] %}
+      {% set g = git_chip.get(e.git_status or 'UNKNOWN', ('', '?')) %}
+      <tr>
+        <td>{% if e.kind == 'text' and e.reason_code not in ('SENSITIVE', 'AI_CONTEXT') %}<a href="/s2/view/{{ run.run_id }}/{{ e.entry_id }}?from=s2a">{{ e.title or e.name }}</a>{% else %}{{ e.title or e.name }}{% endif %}
+          <div class="path muted">{{ e.display }}</div>
+          {% for b in e.badges %}<span class="chip {{ 'danger' if b == '민감' else '' }}">{{ b }}</span>{% endfor %}
+          {% if e.this_month %}<span class="chip">이번 달</span>{% endif %}<details class="mobile-reason"><summary>분류 근거 보기</summary><p>{{ e.reason | folder_reason }}</p></details></td>
+        <td class="path">{{ e.node_path or '—' }}{% if e.verdict == 'JOIN' %} <span class="chip ok">관련 폴더 · 파일 이동 없음</span>{% endif %}</td>
+        <td><span class="chip {{ g[0] }}">{{ g[1] }}</span></td>
+        <td class="hide-sm">{{ e.reason | folder_reason }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}{% endfor %}
+{% endblock %}

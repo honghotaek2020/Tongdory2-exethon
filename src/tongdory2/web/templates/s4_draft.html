@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}인수인계 초안{% endblock %}
+{% block content %}
+<section class="card">
+  <div class="row" style="justify-content:space-between; margin-bottom:10px">
+    <p class="hint" style="margin:0">저장 폴더에 만든 <strong>{{ filename }}</strong> 내용입니다.</p>
+    <div class="row">
+      <a class="btn" href="/s4">← 인수인계로 돌아가기</a>
+      <a class="btn" href="/s4/draft/{{ filename }}?download=1">내려받기</a>
+      <a class="btn primary" href="/s4#kc">지식센터 보관 화면으로</a>
+    </div>
+  </div>
+  <pre style="white-space:pre-wrap; word-break:break-word; background:var(--chip); padding:14px; border-radius:8px; max-height:70vh; overflow:auto; margin:0; font-family:var(--mono); font-size:13px">{{ content }}</pre>
+</section>
+{% endblock %}

@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}파일 분류·정리{% endblock %} · {{ app_name }}</title>
+  <meta name="application-name" content="{{ app_name }}">
+  <meta name="description" content="{{ app_tagline }}">
+  <link rel="icon" type="image/svg+xml" href="/static/brand.svg?v=20261122">
+  <link rel="stylesheet" href="/static/app.css?v=20261122-mwg">
+</head>
+<body>
+<a class="skip-link" href="#main-heading">본문 바로가기</a>
+{% set P = progress(request) %}
+{% set cur_path = request.url.path %}
+<div class="app-shell">
+  <aside class="side" aria-label="주 메뉴">
+    <div class="side-brand">
+      <a class="brand" href="/"><img class="brand-icon" src="/static/brand.svg" alt="" width="32" height="32"><span>{{ app_name }}</span></a>
+      <small>파일 분류·정리·인수인계</small>
+    </div>
+    <p class="nav-scroll-hint">단계와 메뉴를 좌우로 밀어 확인하세요.</p>
+    <div class="side-section">
+      <div class="side-label">작업 흐름</div>
+      <nav class="nav-group stepbar" aria-label="진행 단계">
+        <a class="navbtn {{ 'active' if cur_path == '/' }}" href="/">
+          <span class="nav-txt"><b>상황판</b><small>전체 현황</small></span>
+        </a>
+        {% for st in P.steps %}
+        {% set open_plan = loop.index == 3 and ready_plan %}
+        {% set nav_state = 'now' if open_plan else ('done' if ready_plan and st.state == 'now' else st.state) %}
+        <a class="navbtn step {{ nav_state }} {{ 'active' if (loop.index == 1 and cur_path.startswith('/setup')) or (loop.index == 2 and cur_path.startswith('/s2') and not cur_path.startswith('/s2a') and not cur_path.startswith('/s2/standards')) or (loop.index == 3 and cur_path.startswith('/s3/plan')) or (loop.index == 4 and cur_path == '/s3' and request.query_params.get('done')) }}" href="{{ cur_path if open_plan else st.href }}" {% if nav_state == 'next' %}title="앞 단계를 마치면 열립니다" aria-disabled="true" data-locked="1"{% endif %} {% if nav_state == 'now' %}aria-current="step"{% endif %}>
+          <span class="nav-num">{{ '✓' if nav_state == 'done' else loop.index }}</span>
+          <span class="nav-txt"><b class="st-name">{{ st.name }}{{ '(Liner)' if loop.index == 2 }}</b><small class="st-sum">{% if nav_state == 'now' %}진행 단계 · {% endif %}{{ st.summary }}</small></span>
+        </a>
+        {% endfor %}
+      </nav>
+    </div>
+    <details class="side-section side-extra" open>
+      <summary>추가 기능</summary>
+      <nav class="nav-group" aria-label="추가 기능">
+        <a class="navbtn {{ 'active' if cur_path == '/s3' and not request.query_params.get('done') }}" href="/s3"><span class="nav-txt"><b>작업 기록</b><small>되돌리기·이력</small></span></a>
+        <a class="navbtn {{ 'active' if cur_path.startswith('/s4') }}" href="/s4"><span class="nav-txt"><b>인수인계·보관(Liner)</b><small>초안·지식센터</small></span></a>
+        {% set standards_query = review_query or ('return_to=' ~ (return_to|urlencode) if return_to else 'return_to=%2F' if cur_path == '/' else '') %}
+        <a class="navbtn {{ 'active' if cur_path.startswith('/s2/standards') }}" href="/s2/standards{{ '?' ~ standards_query if standards_query else '' }}"><span class="nav-txt"><b>공개 규격 찾기(Liner)</b><small>규격 번호 검색</small></span></a>
+        <a class="navbtn {{ 'active' if cur_path.startswith('/settings/liner') }}" href="/settings/liner"><span class="nav-txt"><b>Liner API 키</b><small>키 입력·변경</small></span></a>
+      </nav>
+    </details>
+    <details class="side-section side-reset">
+      <summary>기록 관리</summary>
+      <p class="side-note">앱 기록만 다룹니다. 초기화해도 내 PC의 실제 파일은 건드리지 않습니다.</p>
+      <button type="button" class="small" id="open-demo-reset">앱 기록 초기화</button>
+    </details>
+    <form method="post" action="/app/quit" class="side-quit" onsubmit="return confirm('파일 통돌이를 종료할까요? 다시 쓰려면 앱을 다시 실행해야 합니다.')">
+      <button type="submit" class="small">앱 종료</button>
+    </form>
+  </aside>
+  <script>
+  const extraMenu = document.querySelector('.side-extra');
+  extraMenu.open = !matchMedia('(max-width: 960px)').matches || Boolean(extraMenu.querySelector('.active'));
+  </script>
+  <dialog id="demo-reset-dlg" class="tree-zoom" aria-labelledby="demo-reset-title" style="width:min(92vw,560px)">
+    <form method="post" action="/demo-reset">
+      <div class="tz-head"><h2 id="demo-reset-title" style="margin:0">앱 기록을 초기화할까요?</h2></div>
+      <p>폴더 설정, 파일 선택 내역, 작업 기록과 Liner 사용 기록이 삭제됩니다. 내 PC의 실제 폴더와 파일은 삭제되지 않습니다. 지난 실행을 되돌리는 기록도 함께 지워지므로, 지우기 전 기록 사본을 앱 데이터 폴더의 <code>backups/</code>에 남깁니다.</p>
+      <div class="notice">기록을 남긴 채 새 정리만 시작하려면 상황판의 [새 정리 시작]을 이용해 주세요. 내 PC의 실제 파일은 건드리지 않습니다.</div>
+      <label class="row"><input type="checkbox" name="confirm" value="yes" required> 앱 기록 삭제와 되돌리기 기록 삭제를 확인했습니다.</label>
+      <div class="row" style="justify-content:flex-end;gap:6px;margin-top:12px">
+        <button type="button" onclick="this.closest('dialog').close()">취소</button>
+        <button type="submit" class="danger">앱 기록 초기화</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="notice-modal" class="notice-modal" aria-labelledby="notice-modal-title" closedby="any">
+    <div class="notice-modal-card">
+      <div class="notice-modal-head">
+        <h2 id="notice-modal-title">안내</h2>
+      </div>
+      <div id="notice-modal-body" class="notice-modal-body"></div>
+      <div class="notice-modal-foot">
+        <button type="button" class="primary" id="notice-modal-ok" autofocus>확인</button>
+      </div>
+    </div>
+  </dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>
+  // 잠긴 단계는 화면을 바꾸지 않고 이유를 알려 준다(기획서 4-1 단계 이동 제한 토스트)
+  (function(){
+    const toast = document.getElementById('toast'); let tm;
+    window.showToast = msg => { toast.textContent = msg; toast.hidden = false; clearTimeout(tm); tm = setTimeout(() => toast.hidden = true, 2600); };
+    document.querySelectorAll('a[data-locked]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); showToast('앞 단계를 먼저 마쳐야 이 화면을 열 수 있습니다.'); }));
+  })();
+  </script>
+  <script>document.getElementById('open-demo-reset').addEventListener('click',()=>document.getElementById('demo-reset-dlg').showModal());</script>
+  <div class="main-col">
+    <header class="top">
+      <a class="brand" href="/"><span>{{ app_name }}</span></a>
+      <span class="brand-tagline">{{ app_tagline }}</span>
+    </header>
+    <main class="wrap">
+      {% block intro %}{% endblock %}
+      <h1 id="main-heading" class="page-title" tabindex="-1">{% block page_heading %}{{ self.title() }}{% endblock %}</h1>
+      {% set now_step = (P.steps|selectattr('state', 'equalto', 'now')|first) if P.steps else None %}
+      {% set target_step = now_step if now_step else (P.steps[3] if P.executed else None) %}
+      {% set setup_locked = P.running or P.analyzed or P.executed or P.resume %}
+      {% if target_step and ((cur_path.startswith('/setup') and setup_locked) or (cur_path.startswith('/s2') and not cur_path.startswith('/s2a') and not cur_path.startswith('/s2/standards') and P.executed) or (cur_path.startswith('/s3/plan') and P.executed)) %}
+      <dialog class="notice soft-past-bar" id="soft-past-bar" aria-labelledby="soft-past-title" closedby="any">
+        <h2 id="soft-past-title">이미 완료한 단계입니다</h2>
+        <p>현재 <b>{{ target_step.name }}</b> 단계까지 진행했습니다. 진행 중인 작업과 선택은 그대로 유지됩니다.</p>
+        <span class="row" style="gap:8px; justify-content:flex-end">
+          <a class="btn small primary" href="{{ target_step.href }}">현재 단계로 돌아가기 →</a>
+          <button type="button" class="small" id="dismiss-past-bar" autofocus>이 화면 계속 보기</button>
+        </span>
+      </dialog>
+      {% if cur_path.startswith('/setup') and setup_locked %}
+      <div class="notice readonly-bar" id="readonly-bar" role="status">
+        <span><span class="chip warn">읽기 전용</span> <b>설정 수정 불가</b> · 분석·검토가 시작되어 설정을 수정할 수 없습니다.</span>
+        <span class="row" style="gap:6px">
+          <a class="btn small" href="{{ target_step.href if target_step else '/' }}">현재 단계로 돌아가기 →</a>
+          {% if not P.running %}<button type="button" class="small" id="open-unlock">이 단계부터 다시 시작</button>{% endif %}
+        </span>
+      </div>
+      <dialog id="unlock-dlg" class="tree-zoom" aria-labelledby="unlock-title" style="width:min(92vw,520px)">
+        <div class="tz-head"><h2 id="unlock-title" style="margin:0">이 단계부터 다시 시작할까요?</h2></div>
+        <p>이 단계부터 다시 바꾸면 진행 중인 선택이 초기화됩니다. 지난 작업 기록은 그대로 남습니다.</p>
+        <div class="row" style="justify-content:flex-end;gap:6px;margin-top:12px">
+          <button type="button" id="unlock-cancel">취소</button>
+          <button type="button" class="primary" id="unlock-ok">이 단계부터 다시 시작</button>
+        </div>
+      </dialog>
+      {% endif %}
+      {% endif %}
+      {% set q = request.query_params %}
+      {% if cur_path == '/' and s is defined and s.executed %}{% set tp = {'ctx': 'result', 'title': '정리한 폴더', 'count': '이동 완료', 'empty': '표시할 폴더 이동·생성 결과가 없습니다.'} %}
+      {% elif cur_path == '/' %}{% set tp = {'ctx': 'home', 'title': '분류 희망 폴더 목록', 'count': '이동할 파일', 'empty': '분류 희망 폴더 목록을 확정하면 여기에 표시됩니다.'} %}
+      {% elif cur_path.startswith('/setup') %}{% set tp = {'ctx': 'setup', 'title': msg('setup.tree.title'), 'count': '', 'empty': '분류 희망 폴더 목록을 가져오거나 확정하면 여기에 표시됩니다.'} %}
+      {% elif cur_path == '/s2' or cur_path.startswith(('/s2/view', '/s2/names/preview', '/s2/documents/preview')) %}{% set tp = {'ctx': 'review', 'title': '폴더별 이동 계획', 'count': '이동할 파일', 'empty': '분류 희망 폴더 목록을 확정하면 여기에 표시됩니다.'} %}
+      {% elif cur_path.startswith('/s3/plan') %}{% set tp = {'ctx': 'plan', 'title': '폴더별 이동 계획', 'count': '이동 예정', 'empty': '저장 폴더로 옮길 파일이 없습니다.'} %}
+      {% elif cur_path == '/s3' %}{% set tp = {'ctx': 'result', 'title': '정리한 폴더', 'count': '이동 완료', 'empty': '표시할 폴더 이동·생성 결과가 없습니다.'} %}
+      {% else %}{% set tp = None %}{% endif %}
+      {% if tp %}
+      {% set tree = tree_rows if tree_rows is defined else P.tree %}
+      <div class="with-tree"><div id="step-content">{% block content %}{% endblock %}</div>{% include "_tree_panel.html" %}</div>
+      {% else %}
+      <div id="step-content">{{ self.content() }}</div>
+      {% endif %}
+    </main>
+  </div>
+</div>
+<script>
+// #61 결과 화면 복귀 위치는 브라우저 탭마다 따로 기억한다 (다른 탭의 조회가 덮어쓰지 않게)
+(function(){
+  try {
+    if (document.querySelector('[data-s2-result]')) sessionStorage.setItem('s2-back', location.pathname + location.search);
+    const saved = sessionStorage.getItem('s2-back');
+    if (saved) document.querySelectorAll('a[href^="/s2/back"]').forEach(a => {
+      const params = new URL(a.href, location.href).searchParams;
+      if (params.has('run')) return;
+      const to = params.get('to');
+      let url = saved.includes('result=1') ? saved : saved + (saved.includes('?') ? '&' : '?') + 'result=1';
+      if (to && /^[A-Za-z_-]{1,20}$/.test(to)) url += '#' + to;
+      a.href = url;
+    });
+  } catch (e) {}
+  try {
+    const modal = document.getElementById('notice-modal');
+    const modalTitle = document.getElementById('notice-modal-title');
+    const modalBody = document.getElementById('notice-modal-body');
+    const modalOk = document.getElementById('notice-modal-ok');
+    const sources = [...document.querySelectorAll('[data-notice-modal], #step-content > .notice')]
+      .filter(el => !el.hidden && !el.closest('[hidden]') && el.innerHTML.trim() !== '');
+    if (modal && modalTitle && modalBody && modalOk && sources.length > 0) {
+      const hasWarn = sources.some(el => el.classList.contains('warn'));
+      modal.classList.toggle('is-warn', hasWarn);
+      modalTitle.textContent = hasWarn ? '주의 확인' : '안내';
+      modalBody.innerHTML = '';
+      sources.forEach(el => {
+        const item = document.createElement('div');
+        item.className = 'notice-modal-item' + (el.classList.contains('warn') ? ' is-warn' : '') + (el.classList.contains('row') ? ' row' : '');
+        item.innerHTML = el.innerHTML;
+        modalBody.appendChild(item);
+      });
+      modalOk.addEventListener('click', () => modal.close());
+      if (typeof modal.showModal === 'function') {
+        modal.showModal();
+        modalOk.focus();
+      }
+    }
+  } catch (e) {}
+  // v5.1 지나온 설정 단계는 읽기 전용으로 잠근다 — [이 단계부터 다시 시작] 확인 뒤에만 푼다
+  const ro = document.getElementById('readonly-bar');
+  if (ro) {
+    const box = document.getElementById('step-content');
+    const ctl = 'input, textarea, select, button';
+    const lock = on => {
+      box.querySelectorAll(ctl).forEach(el => {
+        if (on && el.closest('[data-allow-readonly]')) return;
+        el.disabled = on;
+      });
+      box.classList.toggle('is-readonly', on);
+    };
+    lock(true);
+    const dlg = document.getElementById('unlock-dlg');
+    const openUnlock = document.getElementById('open-unlock');
+    if (openUnlock && dlg) openUnlock.addEventListener('click', () => dlg.showModal());
+    const unlockCancel = document.getElementById('unlock-cancel');
+    if (unlockCancel && dlg) unlockCancel.addEventListener('click', () => dlg.close());
+    const unlockOk = document.getElementById('unlock-ok');
+    if (unlockOk && dlg) unlockOk.addEventListener('click', () => {
+      dlg.close(); lock(false);
+      ro.innerHTML = '<span>잠금을 풀었습니다. 지난 작업 기록은 그대로 두고 이 단계부터 다시 진행합니다.</span>';
+    });
+  }
+})();
+</script>
+<script src="/static/web-ui.js?v=20261122-mwg"></script>
+<dialog id="busy-modal" class="notice-modal busy-modal" aria-labelledby="busy-title" aria-live="polite">
+  <div class="notice-modal-card">
+    <div class="notice-modal-head"><h2 id="busy-title">실행 중입니다</h2></div>
+    <div class="notice-modal-body">
+      <p id="busy-msg" style="margin:0">잠시만 기다려 주세요.</p>
+      <progress aria-label="처리 중" style="box-sizing:border-box"></progress>
+      <p class="hint" style="margin:0">화면이 바뀔 때까지 창을 닫거나 다시 누르지 마세요.</p>
+    </div>
+  </div>
+</dialog>
+<script>
+// 오래 걸리는 작업(data-busy 양식)은 누르는 즉시 '실행 중' 팝업을 띄우고 버튼을 잠근다
+document.addEventListener('submit', ev => {
+  const form = ev.target;
+  if (!form.matches || !form.matches('form[data-busy]')) return;
+  setTimeout(() => {
+    if (ev.defaultPrevented) return;  // 다른 확인 단계에서 막은 제출은 띄우지 않는다
+    const dlg = document.getElementById('busy-modal');
+    document.getElementById('busy-msg').textContent = form.dataset.busy + '. 잠시만 기다려 주세요.';
+    form.querySelectorAll('button[type=submit], button:not([type])').forEach(b => b.disabled = true);
+    if (dlg && !dlg.open && dlg.showModal) dlg.showModal();
+  }, 0);
+});
+// 뒤로 가기로 돌아온 화면에 팝업·잠금이 남지 않게
+window.addEventListener('pageshow', () => {
+  const dlg = document.getElementById('busy-modal'); if (dlg && dlg.open) dlg.close();
+  document.querySelectorAll('form[data-busy] button').forEach(b => b.disabled = false);
+});
+</script>
+</body>
+</html>

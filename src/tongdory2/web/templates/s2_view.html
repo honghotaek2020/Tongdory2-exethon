@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}미리보기 — {{ e.name }}{% endblock %}
+{% block content %}
+<section class="card">
+  <div class="row" style="justify-content:space-between">
+    <div><h2>{{ e.name }}</h2><p class="hint">{{ e.display }} · 이 미리보기는 외부 전송 없이 내 PC에서 표시합니다.</p></div>
+    <a class="btn" href="{{ back }}">목록으로 돌아가기</a>
+  </div>
+  {% if sensitive %}
+    <div class="notice warn">민감 파일로 판정되어 가려 두었습니다. 내용을 표시하기 전에 화면 공유 여부를 확인해 주세요.
+      <a class="btn" href="{{ reveal_url }}">내용 보기</a></div>
+  {% elif mt.startswith('image/') %}
+    <img src="/s2/file/{{ run_id }}/{{ e.entry_id }}{{ '?reveal=1' if reveal }}" alt="{{ e.name }}" onerror="this.hidden=true;this.nextElementSibling.hidden=false" style="max-width:100%; border:1px solid var(--line); border-radius:8px">
+    <p class="muted" hidden>이미지 미리보기를 열 수 없습니다.</p>
+  {% elif mt == 'application/pdf' %}
+    <iframe title="{{ e.name }}" src="/s2/file/{{ run_id }}/{{ e.entry_id }}{{ '?reveal=1' if reveal }}" style="width:100%; height:75vh; border:1px solid var(--line); border-radius:8px"></iframe>
+  {% elif preview %}
+    <pre style="white-space:pre-wrap; font-family:var(--mono); font-size:12.5px; background:var(--chip); padding:12px; border-radius:8px; max-height:70vh; overflow:auto">{% for line in preview %}{{ line }}
+{% endfor %}</pre>
+  {% else %}
+    <p class="muted">미리볼 수 있는 내용이 없습니다.</p>
+  {% endif %}
+</section>
+{% endblock %}

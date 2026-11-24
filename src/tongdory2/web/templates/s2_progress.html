@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}{{ '파일 분류 중' if local else '문서 분석 중' }}{% endblock %}
+{% block content %}
+<meta http-equiv="refresh" content="2">
+<section class="card">
+  <h2>{{ (job.batch_number ~ '번째 묶음 · ') if (job.batch_number or 1) > 1 else '' }}{{ job.stage | stage_label }}</h2>
+  {% if local %}
+  {% set phases = [
+      ('파일 찾기', ['폴더 탐색 준비', '폴더 스캔', '목록 저장', '이번 묶음 확인']),
+      ('내 PC 분류', ['로컬 분류', '중복 확인', '텍스트 추출', '목적지 대조']),
+      ('Liner 추천', ['1차-1 파일명 매칭', '1차-2 파일명 새 폴더']),
+      ('결과 저장', ['준비', '분류한 파일 확인'])] %}
+  {% set ns = namespace(idx=0, sub=0, count=1) %}
+  {% for name, stages in phases %}{% if job.stage in stages %}{% set ns.idx = loop.index0 %}{% set ns.sub = stages.index(job.stage) %}{% set ns.count = stages|length %}{% endif %}{% endfor %}
+  {% set frac = ([job.done / job.total, 1]|min) if job.total else 0 %}
+  {# 단계 안의 세부 순서까지 반영해 세부 단계가 바뀔 때마다 전체 %가 오른다 #}
+  {% set overall = ((ns.idx + (ns.sub + frac) / ns.count) * 100 / phases|length)|int %}
+  {# 파일 종류 살펴보기는 제외할 것을 고르기 전 단계라 따로 0→100%를 센다 (맨 위 폴더를 지난 비율) #}
+  {% set survey = job.stage == '파일 종류 살펴보기' %}
+  {% if survey %}{% set overall = ((job.frac or 0) * 100)|int %}{% endif %}
+  <ol class="phase-steps" aria-label="전체 진행 단계">
+    {% for name, stages in phases %}
+    <li class="{{ 'done' if loop.index0 < ns.idx else 'now' if loop.index0 == ns.idx else '' }}"{% if loop.index0 == ns.idx %} aria-current="step"{% endif %}>{{ name }}{% if name == 'Liner 추천' and not liner_auto %} <span class="muted small">(사용 안 함)</span>{% endif %}</li>
+    {% endfor %}
+  </ol>
+  {# 진행 막대는 하나만: 전체 %. 세부 개수는 아래 글로 보인다 #}
+  <label class="small muted" for="overall-progress">{{ '파일 종류 살펴보기' if survey else '전체' }} {{ overall }}%</label>
+  <progress id="overall-progress" class="overall" value="{{ overall }}" max="100"></progress>
+  {% elif job.total %}<progress value="{{ job.done }}" max="{{ job.total }}" aria-label="진행률"></progress>
+  {% else %}<progress aria-label="진행 중 (전체 개수 확인 중)"></progress>{% endif %}
+  <p class="hint">{% if job.total %}{{ '{:,}'.format(job.done) }} / {{ '{:,}'.format(job.total) }}{% elif local %}{{ '{:,}'.format(job.done) }}개 {{ '저장' if job.stage == '목록 저장' else '발견' }}{% else %}처리 준비 중{% endif %}
+    {% if elapsed is defined and elapsed %} · 경과 {{ elapsed // 60 }}분 {{ elapsed % 60 }}초{% endif %} ·
+    {% if local %}내 PC에서 파일을 분류하고 있습니다. 파일이 많으면 시간이 걸립니다.
+    {% elif job.document %}선택한 문서의 내용을 바탕으로 이동할 폴더를 비교합니다.{% endif %} 파일은 옮기지 않습니다.</p>
+  {% if elapsed is defined and elapsed >= 20 %}
+  <div class="notice warn">화면이 한동안 바뀌지 않으면 아래 [화면 갱신]을 눌러 주세요. 화면을 갱신해도 작업은 중단되거나 처음부터 다시 시작되지 않습니다.</div>
+  {% endif %}
+  <div class="row"><a href="{{ refresh_to or '/s2' }}" class="btn primary">화면 갱신</a>{% if previous_result %}<a href="{{ previous_result }}" class="btn">기존 결과 보기</a>{% endif %}<a href="/" class="btn">상황판으로</a></div>
+</section>
+<script>setTimeout(function(){ location.replace({{ (refresh_to or '/s2')|tojson }}); }, 5000);</script>
+{% endblock %}

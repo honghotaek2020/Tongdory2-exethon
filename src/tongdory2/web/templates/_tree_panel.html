@@ -1,0 +1,169 @@
+{# v5.1 '트리 위치 통일': 상황판·설정·검토·계획·결과 화면 모두 오른쪽 같은 자리에 폴더 모양을 고정한다. #}
+<aside class="tree-aside" aria-labelledby="tp-title">
+  <section class="card tree-panel{{ ' is-fresh' if tp.ctx == 'setup' and imported_from else '' }}" id="tree-panel" data-ctx="{{ tp.ctx }}" data-count-label="{{ tp.count }}">
+    <div class="tp-head">
+      <div class="row" style="justify-content:space-between">
+        <h2 id="tp-title" style="margin:0">{{ tp.title }}</h2>
+        {% if tree or tp.ctx == 'setup' %}<button type="button" class="small" id="open-tree-zoom" {% if not tree %}hidden{% endif %}>넓게 보기</button>{% endif %}
+      </div>
+      {% if tp.ctx == 'setup' %}
+      <p class="muted small" style="margin:0">{{ msg('setup.tree.desc') }}</p>
+      {% elif tp.ctx == 'result' %}
+      <p class="muted small" style="margin:0">파일을 옮기거나 새로 만든 폴더입니다.</p>
+      {% endif %}
+      {% if new_folder_files is defined %}
+      <form method="post" action="/s2/check" id="leave-new-folders" class="row" style="margin-top:8px">
+        <input type="hidden" name="run_id" value="{{ run.run_id }}">
+        <input type="hidden" name="action" value="leave_check">
+        <input type="hidden" name="return_to" value="{{ review_url }}">
+        <span class="small muted" id="leave-new-summary" aria-live="polite">{% if bar is defined and bar.batches|length > 1 %}이번 분류 묶음 · {% endif %}새로 만들 폴더 {{ new_folder_count }}곳 · 선택 파일 {{ new_folder_files }}개</span>
+        <button class="small" type="submit" {{ 'disabled' if not new_folder_files }}>새 폴더가 필요한 파일 선택 해제</button>
+      </form>
+      {% endif %}
+      {% if tree or tp.ctx == 'setup' %}
+      <div class="row tree-filters" id="tree-filters" {% if not tree %}hidden{% endif %}>
+        {% if tp.ctx == 'result' %}
+        <label class="row small" style="gap:5px;cursor:pointer"><input type="checkbox" data-tree-show-all> 분류 희망 폴더 목록 함께 보기</label>
+        {% else %}
+        <button type="button" class="chip-btn on" data-tfilter="all">전체</button>
+        {% if tp.ctx != 'setup' %}<button type="button" class="chip-btn" data-tfilter="new">새 폴더만</button>{% endif %}
+        {% if tp.count %}<button type="button" class="chip-btn" data-tfilter="changed">{{ '파일을 옮길 폴더만' if tp.ctx in ('home', 'review', 'plan') else tp.count ~ ' 항목만' }}</button>{% endif %}
+        {% if tp.ctx == 'setup' %}
+        <span class="chip" id="tree-depth-chip" hidden></span>
+        <span class="chip ok" id="tree-lines-chip" hidden></span>
+        {% endif %}
+        {% endif %}
+        {% if tree|length > 6 or tp.ctx == 'setup' %}
+        <button type="button" class="chip-btn" data-tree-expand title="모든 하위 폴더 펼치기">모두 펼치기</button>
+        <button type="button" class="chip-btn" data-tree-collapse title="상위 폴더만 남기고 접기">모두 접기</button>
+        {% endif %}
+        <span class="muted small" data-tree-total>{% if tp.ctx == 'result' %}작업한 폴더만 표시{% else %}폴더 {{ tree|length }}개{% endif %}</span>
+      </div>
+      {% if tp.ctx == 'result' %}<p class="muted small" data-tree-basis-legend hidden>회색 기울임체는 실제 폴더가 없는 항목입니다.</p>{% endif %}
+      {% endif %}
+    </div>
+    {% if tree or tp.ctx == 'setup' %}
+    <div class="tree tp-body" id="tree-panel-body" tabindex="0" role="region" aria-label="스크롤 가능한 폴더 목록" {% if not tree %}hidden{% endif %}>
+      {% for n in tree %}
+      {% set basis_only = tp.ctx == 'result' and n.presence == 'missing' and not n.n and not n.made %}
+      <div class="trow" data-tree-path="{{ n.path }}" data-basis-only="{{ '1' if basis_only else '0' }}" data-new="{{ '1' if (n.made if tp.ctx == 'result' else n.new) else '0' }}" data-changed="{{ '1' if n.n or (tp.ctx == 'result' and n.made) else '0' }}" data-depth="{{ n.depth }}" style="padding-left: {{ n.depth * 14 }}px;{{ 'display:none' if tp.ctx == 'result' and not n.n and not n.made }}">
+        <{% if n.leaf %}span{% else %}button type="button" aria-expanded="true"{% endif %} class="tname" style="{{ '' if n.leaf or basis_only else 'font-weight:700' }}"{% if basis_only %} title="분류 희망 폴더 목록에만 있는 폴더"{% endif %}><span class="tarrow" aria-hidden="true">{{ '└ ' if n.depth else '▾ ' }}</span>{{ n.path.split('/')[-1] }}{% if n.new %} <span class="chip warn">{{ '만들 폴더' if tp.ctx == 'plan' else '새 폴더 제안' }}</span>{% elif n.made %} <span class="chip ok">새로 만든 폴더</span>{% endif %}
+        {% if tp.ctx == 'result' and n.presence != 'exists' and not basis_only %}<span class="small muted">{% if n.presence == 'missing' %}현재 없음{% elif n.presence == 'not_directory' %}현재 폴더 아님{% else %}존재 확인 불가{% endif %}</span>{% endif %}</{% if n.leaf %}span{% else %}button{% endif %}>
+        {% if tp.count %}<span class="cnt"><span class="chip tree-count {{ 'warn' if n.new else 'ok' }}" {% if not n.n %}hidden{% endif %}>{% if n.n %}{{ tp.count }} {{ n.n }}개{% endif %}</span></span>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    <p class="muted" id="tree-empty-msg" {% if tree %}hidden{% endif %}>{{ tp.empty }}</p>
+    <p class="muted small tp-foot" id="tree-panel-foot" {% if not tree %}hidden{% endif %}>{% if tp.count %}상위 폴더의 파일 수에는 하위 폴더가 포함됩니다. {% endif %}폴더 이름을 누르면 하위 폴더를 접거나 펼칠 수 있습니다.</p>
+    {% else %}
+    <p class="muted">{{ tp.empty }}</p>
+    {% endif %}
+  </section>
+</aside>
+{% if tree or tp.ctx == 'setup' %}
+<dialog id="tree-zoom-dlg" class="tree-zoom" aria-labelledby="tz-title">
+  <div class="tz-head"><div class="row" style="justify-content:space-between">
+    <h2 id="tz-title" style="margin:0">{{ tp.title }}</h2>
+    <button type="button" id="close-tree-zoom">닫기</button>
+  </div>
+  {% if P.current_d %}<p class="muted small" style="margin:6px 0 0">저장 폴더 {{ P.current_d }}</p>{% endif %}
+  <div class="row tree-filters">
+    {% if tp.ctx == 'result' %}
+    <label class="row small" style="gap:5px;cursor:pointer"><input type="checkbox" data-tree-show-all> 분류 희망 폴더 목록 함께 보기</label>
+    {% else %}
+    <button type="button" class="chip-btn on" data-tfilter="all">전체</button>
+    {% if tp.ctx != 'setup' %}<button type="button" class="chip-btn" data-tfilter="new">새 폴더만</button>{% endif %}
+    {% if tp.count %}<button type="button" class="chip-btn" data-tfilter="changed">{{ '파일을 옮길 폴더만' if tp.ctx in ('home', 'review', 'plan') else tp.count ~ ' 항목만' }}</button>{% endif %}
+    {% endif %}
+    {% if tree|length > 6 or tp.ctx == 'setup' %}
+    <button type="button" class="chip-btn" data-tree-expand title="모든 하위 폴더 펼치기">모두 펼치기</button>
+    <button type="button" class="chip-btn" data-tree-collapse title="상위 폴더만 남기고 접기">모두 접기</button>
+    {% endif %}
+    <span class="muted small" data-tree-total>{% if tp.ctx == 'result' %}작업한 폴더만 표시{% else %}폴더 {{ tree|length }}개{% endif %}</span>
+  </div>{% if tp.ctx == 'result' %}<p class="muted small" data-tree-basis-legend hidden>회색 기울임체는 실제 폴더가 없는 항목입니다.</p>{% endif %}</div>
+  <div class="tree" id="zoom-tree-body" tabindex="0" role="region" aria-label="스크롤 가능한 넓은 폴더 목록"></div>
+  <div class="tz-foot row" style="justify-content:space-between"><span class="muted small">상위 폴더의 파일 수에는 하위 폴더가 포함됩니다. 폴더 이름을 누르면 하위 폴더를 접거나 펼칠 수 있습니다.</span><button type="button" onclick="this.closest('dialog').close()">닫기</button></div>
+</dialog>
+<script>
+(function(){
+  const treePanel = document.getElementById('tree-panel');
+  let mode = (treePanel && treePanel.dataset.ctx === 'result') ? 'changed' : 'all';
+  const collapsed = new Set();
+  const panel = document.getElementById('tree-panel-body');
+  function apply(root){
+    if (!root) return;
+    let vis = 0, hideBelow = null;
+    const rows = [...root.querySelectorAll('.trow')];
+    rows.forEach((r, i) => {
+      const d = +r.dataset.depth;
+      const next = rows[i + 1];
+      const hasKids = Boolean(next && +next.dataset.depth > d);
+      r.classList.toggle('has-children', hasKids);
+      if (hideBelow !== null && d <= hideBelow) hideBelow = null;
+      const okF = mode === 'all' || (mode === 'new' && r.dataset.new === '1') || (mode === 'changed' && r.dataset.changed === '1');
+      const ok = okF && hideBelow === null;
+      r.style.display = ok ? '' : 'none';
+      if (ok) vis++;
+      const isFolded = hasKids && collapsed.has(i);
+      r.classList.toggle('folded', isFolded);
+      const toggle = r.querySelector('button.tname');
+      if (toggle) toggle.setAttribute('aria-expanded', !isFolded);
+      const arrow = r.querySelector('.tarrow');
+      if (arrow) {
+        arrow.textContent = hasKids ? (isFolded ? '▸ ' : '▾ ') : (d ? '└ ' : '· ');
+      }
+      if (isFolded && hideBelow === null) hideBelow = d;
+    });
+    let empty = root.querySelector('.tree-empty');
+    if (!empty) { empty = document.createElement('p'); empty.className = 'muted small tree-empty'; empty.textContent = '조건에 맞는 폴더가 없습니다.'; root.appendChild(empty); }
+    empty.style.display = (rows.length > 0 && vis === 0) ? '' : 'none';
+    const summary = root.parentElement.querySelector('[data-tree-total]');
+    if (summary) summary.textContent = treePanel && treePanel.dataset.ctx === 'result'
+      ? `${mode === 'all' ? '분류 희망 폴더 목록 포함 · ' : ''}폴더 ${vis}개 표시`
+      : rows.length ? (vis === rows.length ? `폴더 ${rows.length}개` : `전체 ${rows.length}개 폴더 중 ${vis}개 표시`) : '폴더 0개';
+  }
+  const zoom = document.getElementById('zoom-tree-body');
+  const all = () => { apply(panel); apply(zoom); document.querySelectorAll('[data-tree-basis-legend]').forEach(note => { note.hidden = mode !== 'all'; }); };
+  document.addEventListener('tongdory:tree-counts', all);
+  document.addEventListener('tongdory:tree-reset', () => { collapsed.clear(); mode = (treePanel && treePanel.dataset.ctx === 'result') ? 'changed' : 'all'; all(); });
+  document.querySelectorAll('[data-tfilter]').forEach(btn => btn.addEventListener('click', () => {
+    mode = btn.dataset.tfilter;
+    document.querySelectorAll('[data-tfilter]').forEach(b => b.classList.toggle('on', b.dataset.tfilter === mode));
+    all();
+  }));
+  document.querySelectorAll('[data-tree-show-all]').forEach(cb => cb.addEventListener('change', () => {
+    mode = cb.checked ? 'all' : 'changed';
+    document.querySelectorAll('[data-tree-show-all]').forEach(other => { other.checked = cb.checked; });
+    all();
+  }));
+  document.querySelectorAll('[data-tree-expand]').forEach(btn => btn.addEventListener('click', () => {
+    collapsed.clear();
+    all();
+  }));
+  document.querySelectorAll('[data-tree-collapse]').forEach(btn => btn.addEventListener('click', () => {
+    collapsed.clear();
+    const rows = [...panel.querySelectorAll('.trow')];
+    rows.forEach((r, i) => {
+      const next = rows[i + 1];
+      if (next && +next.dataset.depth > +r.dataset.depth) collapsed.add(i);
+    });
+    all();
+  }));
+  // 폴더를 누르면 접기/펼치기 — 원래 화면과 넓게 보기가 같이 바뀐다
+  function onClick(e){
+    const toggle = e.target.closest('button.tname'); if (!toggle) return;
+    const row = toggle.closest('.trow'); if (!row) return;
+    const rows = [...row.parentNode.querySelectorAll('.trow')]; const i = rows.indexOf(row);
+    const next = rows[i + 1]; if (!next || +next.dataset.depth <= +row.dataset.depth) return;
+    collapsed.has(i) ? collapsed.delete(i) : collapsed.add(i); all();
+  }
+  panel.addEventListener('click', onClick); zoom.addEventListener('click', onClick);
+  const dlg = document.getElementById('tree-zoom-dlg');
+  const openBtn = document.getElementById('open-tree-zoom');
+  if (openBtn) openBtn.addEventListener('click', () => { zoom.innerHTML = panel.innerHTML; apply(zoom); dlg.showModal(); });
+  const closeBtn = document.getElementById('close-tree-zoom');
+  if (closeBtn) closeBtn.addEventListener('click', () => dlg.close());
+  apply(panel);
+})();
+</script>
+{% endif %}

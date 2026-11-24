@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}파일 이동 전 확인{% endblock %}
+{% block content %}
+{% if notice %}<div class="notice warn" data-notice-modal>{{ notice }}</div>{% endif %}
+{% set labels = {'HOLD': '보류함으로 이동', 'TRASH': '휴지통으로 (복원 가능)'} %}
+<section class="card">
+  <h2>파일 이동 전 확인</h2>
+  <p class="hint">아직 파일은 옮기지 않았습니다. 아래 내용을 확인한 뒤 실행하세요.</p>
+  <div class="stats" style="grid-template-columns:repeat(3,1fr)">
+    <a><b>{{ n_moves }}</b>이동할 파일</a>
+    <a><b>{{ mkdirs|length }}</b>만들 폴더</a>
+    <a><b>{{ n_keep }}</b>원래 위치에 둘 파일</a>
+  </div>
+  <p class="hint">옮기지 않는 {{ n_keep }}개는 원래 위치에 그대로 남습니다.</p>
+  <div class="notice" style="margin:8px 0 0; font-size:13px">
+    같은 이름 파일은 덮어쓰지 않고 건너뛰며, 실행 후 <b>작업 기록</b>에서 되돌릴 수 있습니다.
+  </div>
+  {% if unchecked_liner %}<p class="hint">직접 확인하거나 체크할 Liner 제안 {{ unchecked_liner }}개가 있습니다. 검토 화면에서 체크하면 계획에 포함됩니다.</p>{% endif %}
+  {% if saved_versions %}<p class="hint">저장 폴더에 비슷한 이전 버전 파일 {{ saved_versions }}개가 있습니다. 이번에는 정리 대상 폴더의 파일만 옮깁니다.</p>{% endif %}
+  {% if not fresh %}<div class="notice warn">계획을 만든 뒤 정리 설정·분석 결과 또는 검토 화면의 체크·직접 지정이 바뀌었습니다. 이 계획은 실행할 수 없습니다.
+    <a class="btn" href="/s2/back">검토 화면에서 계획 다시 만들기</a></div>
+  {% elif status != 'READY' %}<div class="notice warn">이미 실행한 계획입니다.</div>{% endif %}
+</section>
+
+{% if by_folder %}
+<section class="card">
+  <div class="row" style="justify-content:space-between; margin-bottom:8px">
+    <h2>파일별 이동 계획 <span class="muted">저장 폴더: {{ cur_d }}</span></h2>
+  </div>
+  <div id="plan-list-view">
+    {% set folder_items = by_folder.items()|list %}
+    {% for folder, ops in folder_items[:20] %}
+    <details style="border-bottom:1px solid var(--line); padding:6px 0">
+      <summary class="row" style="justify-content:space-between; cursor:pointer">
+        <span class="path">{{ folder }} {% if folder in new_rel %}<span class="chip warn">새 폴더</span>{% endif %}</span>
+        <span class="chip ok">파일 {{ ops|length }}개</span>
+      </summary>
+      {% for o in ops %}<div class="path muted" style="padding:2px 0 2px 14px">{{ o.src_d }} → {{ o.dst_d.split('/')[-1] }}{% if o.sensitivity == 'L2' %} <span class="chip">본문 전송 제한 문서</span>{% endif %}</div>{% endfor %}
+    </details>
+    {% endfor %}
+    {% if folder_items|length > 20 %}
+    <details style="margin-top:8px">
+      <summary class="link" style="cursor:pointer">나머지 {{ folder_items|length - 20 }}개 폴더 더 보기</summary>
+      {% for folder, ops in folder_items[20:] %}
+      <details style="border-bottom:1px solid var(--line); padding:6px 0">
+        <summary class="row" style="justify-content:space-between; cursor:pointer">
+          <span class="path">{{ folder }} {% if folder in new_rel %}<span class="chip warn">새 폴더</span>{% endif %}</span>
+          <span class="chip ok">파일 {{ ops|length }}개</span>
+        </summary>
+        {% for o in ops %}<div class="path muted" style="padding:2px 0 2px 14px">{{ o.src_d }} → {{ o.dst_d.split('/')[-1] }}{% if o.sensitivity == 'L2' %} <span class="chip">본문 전송 제한 문서</span>{% endif %}</div>{% endfor %}
+      </details>
+      {% endfor %}
+    </details>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+
+{% for kind in ['HOLD', 'TRASH'] %}{% if groups[kind] %}
+<section class="card">
+  <h2>{{ labels[kind] }} <span class="muted">{{ groups[kind]|length }}</span></h2>
+  {% for o in groups[kind] %}<div class="path">{{ o.src_d }} → {{ o.dst_d }}</div>{% endfor %}
+</section>
+{% endif %}{% endfor %}
+
+{% if skipped %}
+<details class="card" style="display:block">
+  <summary>이동 계획에서 제외된 파일 {{ skipped|length }}개</summary>
+  {% for s in skipped %}<div>{{ s.name }} <span class="muted">— {{ s.reason | folder_reason }}</span></div>{% endfor %}
+</details>
+{% endif %}
+
+{% if status == 'READY' and fresh and n_moves %}
+<form method="post" action="/s3/execute/{{ plan_id }}" data-busy="파일을 옮기고 있습니다" class="bar" style="flex-direction:column; align-items:stretch">
+  <h3 style="margin:0">이동 내용 확인</h3>
+  <label class="row"><input type="checkbox" name="confirm" value="yes" required> 옮길 {{ n_moves }}개 파일과 저장 위치를 확인했습니다.</label>
+  {% if extra_ack %}<label class="row"><input type="checkbox" name="extra_confirm" value="yes" required> {{ extra_ack }}</label>{% endif %}
+  {% for w in warnings %}<div class="notice warn" style="margin:0">{{ w }}</div>{% endfor %}
+  {% for code, text in acks %}
+  <label class="row"><input type="checkbox" name="acks" value="{{ code }}" required> {{ text }}</label>
+  {% endfor %}
+  <div class="row" style="justify-content:flex-end"><a class="btn" href="/s2/back">← 검토로 돌아가기</a> <button class="primary" type="submit">파일 {{ n_moves }}개 이동 시작</button></div>
+</form>
+{% elif status == 'READY' and fresh %}
+<section class="card">
+  <h2>이번 계획에는 옮길 파일이 없습니다</h2>
+  {% set gone = skipped|selectattr('reason', 'equalto', '원본 없음')|list %}
+  {% if gone %}<p>체크한 파일 중 <b>{{ gone|length }}개는 원래 자리에 없습니다</b> — 이전 작업이나 직접 이동·삭제로 원래 위치에 없을 수 있습니다. 옮긴 결과는 작업 기록에서 확인하고 되돌릴 수 있습니다.</p>
+  {% elif skipped %}<p>체크한 파일을 모두 뺐습니다. 아래 '이동 계획에서 제외된 파일'에서 이유를 확인하세요.</p>
+  {% else %}<p>체크한 파일이 없습니다. 검토 화면에서 옮길 파일을 고르세요.</p>{% endif %}
+  <div class="row">
+    {% if gone %}<a class="btn primary" href="/s3">작업 기록·되돌리기</a>{% endif %}
+    <a class="btn {{ '' if gone else 'primary' }}" href="/s2/back">검토 화면으로 돌아가기</a>
+    {% if gone %}<span class="muted">남은 파일을 정리하려면 검토 화면 아래 [새 파일·변경 파일 확인]으로 다시 분류하세요.</span>{% endif %}
+  </div>
+  {% if not gone %}
+  <form method="post" action="/s3/execute/{{ plan_id }}" data-busy="파일을 옮기고 있습니다" class="row" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line);justify-content:space-between">
+    <input type="hidden" name="allow_empty" value="1">
+    <label class="row"><input type="checkbox" name="confirm" value="yes" required> 파일은 옮기지 않고 이번 묶음 검토를 마칩니다.</label>
+    <button type="submit" class="primary">파일 이동 없이 검토 완료</button>
+  </form>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

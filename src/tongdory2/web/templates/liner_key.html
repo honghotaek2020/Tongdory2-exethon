@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Liner API 키{% endblock %}
+{% block content %}
+{% if notice %}<div class="notice" data-notice-modal>{{ notice }}</div>{% endif %}
+{% if return_to %}<p><a href="{{ return_to }}">← 이전 화면으로 돌아가기</a>{% if not key.key %} <span class="muted small">키를 저장하면 이전 화면으로 돌아갑니다.</span>{% endif %}</p>{% endif %}
+<section class="card" aria-labelledby="key-status-title">
+  <h2 id="key-status-title">현재 키</h2>
+  <div class="row" style="justify-content:space-between">
+    {% if key.key %}
+    <p style="margin:0"><span class="chip ok">설정됨</span> <code>{{ key.masked }}</code> · {{ key.label }}</p>
+    {% else %}
+    <p style="margin:0"><span class="chip warn">설정 안 됨</span> 키는 Liner 분석에만 필요합니다. 파일 분류와 직접 정리는 키 없이 할 수 있습니다.</p>
+    {% endif %}
+    <form method="post" action="/settings/liner" onsubmit="return confirm('저장한 키를 삭제할까요?')">
+      <input type="hidden" name="action" value="delete">
+      {% if return_to %}<input type="hidden" name="return_to" value="{{ return_to }}">{% endif %}
+      <button class="danger small" type="submit" {{ 'disabled' if not key.app_key_saved }}
+              title="{{ '이 화면에서 저장한 키를 삭제합니다' if key.app_key_saved else '삭제할 저장 키가 없습니다' }}">키 삭제</button>
+    </form>
+  </div>
+  {% if key.source == 'env' %}
+  <p class="hint">환경 변수 <code>LINER_API_KEY</code>의 키를 사용하고 있습니다. 이 화면에서 저장한 키를 쓰려면 환경 변수를 지우고 다시 실행하세요.</p>
+  {% endif %}
+</section>
+
+<section class="card" aria-labelledby="key-form-title">
+  <h2 id="key-form-title">{{ '키 변경' if key.app_key_saved else '키 입력' }}</h2>
+  <form method="post" action="/settings/liner" class="row" autocomplete="off" id="key-save-form">
+    <input type="hidden" name="action" value="save">
+    {% if return_to %}<input type="hidden" name="return_to" value="{{ return_to }}">{% endif %}
+    <input id="liner-key" type="password" name="key" aria-label="Liner API 키" required minlength="8" maxlength="512" spellcheck="false"
+           autocomplete="off" placeholder="Liner Platform API 키" style="flex:1 1 260px;min-width:0;font-family:var(--mono)">
+    <button class="primary" type="submit" id="key-save">저장</button>
+  </form>
+  <p class="hint">저장할 때 Liner에 키가 맞는지 확인합니다(요금 없음). 키는 이 PC에만 저장되고, 화면에는 끝 4자리만 보입니다.</p>
+</section>
+<script>
+document.getElementById('key-save-form').addEventListener('submit', () => {
+  const b = document.getElementById('key-save');
+  setTimeout(() => { b.disabled = true; b.textContent = '키 확인 중…'; });
+});
+</script>
+{% endblock %}

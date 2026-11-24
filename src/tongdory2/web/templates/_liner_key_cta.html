@@ -1,0 +1,4 @@
+{# Liner API 키가 없을 때 Liner 버튼 대신 보여 주는 키 등록 안내. 저장하면 return_to 화면으로 돌아온다. #}
+{% macro key_cta(return_to, label='API 키 등록하고 Liner로 분석', cls='btn') -%}
+<a class="{{ cls }} liner-key-cta" href="/settings/liner?return_to={{ return_to|urlencode }}" title="키를 저장하면 이 화면으로 돌아옵니다">{{ label }}</a>
+{%- endmacro %}

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Liner에 보낼 내용 확인{% endblock %}
+{% block content %}
+{% set is_names = (mode|default('documents')) == 'names' %}
+{% set excluded = entries|rejectattr('verdict', 'equalto', 'PENDING')|list %}
+<section class="card">
+  {% if ready %}
+  <h2>{{ '파일명 %d개를 Liner에 보낼까요?'|format(ready|length) if is_names else '문서 본문 일부(1,500자)와 폴더 이름 정보를 Liner에 보낼까요?' }}</h2>
+  {% if not is_names %}<p class="hint">이메일·전화번호·주민등록번호·카드번호·금액은 ***로 가려서 보냅니다.</p>{% endif %}
+  <p class="hint">{% if is_names %}파일명으로 분류 · 파일명만 보냅니다(본문은 보내지 않음).{% else %}본문 내용으로 분류 · 본문 발췌의 이메일·전화번호 등을 가려 보냅니다.{% endif %} 분류 희망 폴더 목록에서 맞는 곳을 찾고, 맞는 곳이 없으면 새 폴더를 추천합니다.</p>
+  {% else %}
+  <h2>보낼 문서가 없습니다</h2>
+  {% endif %}
+
+  <p class="preview-summary-chips small muted">선택 {{ entries|length }}개 · 전송 대상 {{ ready|length }}개{% if excluded %} · 제외 {{ excluded|length }}개{% endif %}{% if ready and not is_names %} · 문서 이름을 누르면 실제로 보낼 내용(개인정보를 *** 처리한 본문)을 볼 수 있습니다.{% endif %}</p>
+
+  {% if ready %}
+  <div class="preview-file-box" role="region" aria-label="전송 대상 목록">
+    {% if is_names %}
+    <ul class="preview-file-list">
+      {% for entry in ready %}
+      <li><span class="muted small">{{ loop.index }}.</span> <span class="path">{{ entry.payload|replace('파일명: ', '', 1) }}</span></li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    {% for entry in ready %}
+    <details class="payload-item" {{ 'open' if loop.length == 1 }}>
+      <summary><span class="muted small">{{ loop.index }}.</span> {{ entry.name }}</summary>
+      <pre class="export-preview">{{ entry.payload }}</pre>
+    </details>
+    {% endfor %}
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if excluded %}
+  <details class="preview-excluded save-preview-box" style="margin-top:10px" {{ 'open' if not ready }}>
+    <summary class="small muted" style="cursor:pointer">제외 {{ excluded|length }}개 · 사유 보기</summary>
+    <ul class="preview-file-list" style="margin-top:6px">
+      {% for entry in excluded %}
+      <li><span class="path">{{ entry.name }}</span> <span class="muted small">— {{ entry.reason | folder_reason }}</span></li>
+      {% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+
+  {% if ready %}
+  <details class="save-preview-box" style="margin-top:10px">
+    <summary class="small muted" style="cursor:pointer">함께 보내는 과제 이름·폴더 설명 {{ folders|length }}개</summary>
+    {% if projects %}<p class="small" style="margin:8px 0 4px"><strong>과제:</strong> {{ projects|join(' · ') }}</p>{% endif %}
+    <ul class="small" style="margin:4px 0 0;padding-left:18px">{% for folder in folders %}<li>{{ folder }}</li>{% endfor %}</ul>
+  </details>
+  {% endif %}
+
+  <div class="row preview-actions">
+    <a class="btn" href="{{ return_to }}">돌아가기</a>
+    {% if ready %}
+    <form method="post" action="{{ submit_action|default('/s2/documents') }}" data-busy="Liner에 보내고 분석을 시작하고 있습니다" class="row" style="gap:10px;margin-left:auto">
+      <input type="hidden" name="run_id" value="{{ run_id }}">
+      <input type="hidden" name="return_to" value="{{ return_to }}">
+      <input type="hidden" name="approval" value="{{ approval }}">
+      {% for entry in entries %}<input type="hidden" name="entry_ids" value="{{ entry.entry_id }}">{% endfor %}
+      <span class="small muted">{{ '20개씩 묶어 호출' if is_names else '문서마다 여러 번 호출될 수 있습니다' }} · 비용은 사용 이력에서 확인</span>
+      {% if is_names %}<label class="row"><input type="checkbox" name="reviewed" value="yes" required> 파일명을 보내는 데 동의합니다</label>{% endif %}
+      <button class="primary" type="submit"{% if not is_names %} name="reviewed" value="yes"{% endif %}>보내고 분석 시작</button>
+    </form>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}
